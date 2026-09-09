@@ -43,8 +43,7 @@ in React Native, hosted inside a minimal native Android shell.
   [IME_BRIDGE_PROTOCOL.md](./IME_BRIDGE_PROTOCOL.md)).
 - **backend/node-service** exists only for things that need a server: GIF
   search (provider keys must not ship in the client), translation fallback
-  (Google Cloud Translate key, same reason), and cross-device sync of
-  user themes.
+  (DeepL key, same reason), and cross-device sync of user themes.
 
 ## Key flows
 
@@ -59,7 +58,7 @@ in React Native, hosted inside a minimal native Android shell.
   (no network) so suggestions appear with no latency as the user types.
 - **Translation**: `TranslationBar` reads text before the cursor via
   `InputConnection.getTextBeforeCursor`, then calls the backend's
-  `/api/translate`, which proxies Google Cloud Translate.
+  `/api/translate`, which proxies DeepL.
 - **GIFs/stickers**: `GifStickerPanel` calls `/api/gif/search`, which proxies
   whichever provider(s) `GIF_PROVIDER` selects (Tenor and/or Klipy - see
   `services/gifProviders.js`). Selecting a result

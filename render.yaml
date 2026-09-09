@@ -25,5 +25,5 @@ services:
         sync: false
       - key: TENOR_API_KEY
         sync: false
-      - key: GOOGLE_TRANSLATE_API_KEY
+      - key: DEEPL_API_KEY
         sync: false
