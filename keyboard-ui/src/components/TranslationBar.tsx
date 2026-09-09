@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {translateText, getLanguages, LanguageOption} from '../services/translation';
@@ -53,7 +54,7 @@ export function TranslationBar() {
     try {
       const sourceText = await InputConnection.getTextBeforeCursor(200);
       if (!sourceText.trim()) {
-        setError('Type something first');
+        setError('Type something, then tap ↻ to translate it');
         return;
       }
       const result = await translateText(sourceText, targetLocale, sourceLocale);
@@ -97,6 +98,16 @@ export function TranslationBar() {
     InputConnection.commitText(translated);
     setTranslated(null);
     setTranslationBarVisible(false);
+  };
+
+  // The bar only ever translates a snapshot of text-before-cursor taken
+  // at one moment (bar opening, or picking a language) - nothing re-runs
+  // it as the user keeps typing, so this is the way to say "translate
+  // what I've typed *now*" without having to re-pick a language.
+  const retranslate = () => {
+    if (translateTargetLocale) {
+      runTranslation(translateTargetLocale, translateSourceLocale);
+    }
   };
 
   const sourceLabel = translateSourceLocale
@@ -162,6 +173,11 @@ export function TranslationBar() {
             {targetLabel}
           </Text>
         </TouchableOpacity>
+        {translateTargetLocale && (
+          <TouchableOpacity onPress={retranslate} style={styles.refreshButton} hitSlop={8}>
+            <Icon name="refresh" size={18} color={theme.keyText} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={() => setTranslationBarVisible(false)} style={styles.closeButton} hitSlop={8}>
           <Text style={{color: theme.keyText}}>✕</Text>
         </TouchableOpacity>
@@ -175,7 +191,7 @@ export function TranslationBar() {
         )}
         {loading && <ActivityIndicator color={theme.accent} />}
         {error && (
-          <Text style={{color: theme.keyText, opacity: 0.7, paddingVertical: 4}} numberOfLines={1}>
+          <Text style={{color: theme.keyText, opacity: 0.7, paddingVertical: 4}} numberOfLines={2}>
             {error}
           </Text>
         )}
@@ -206,8 +222,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  closeButton: {
+  refreshButton: {
     marginLeft: 'auto',
+    paddingHorizontal: 8,
+  },
+  closeButton: {
     paddingHorizontal: 8,
   },
   bodyArea: {
