@@ -4,6 +4,14 @@ import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {translateText, getLanguages, LanguageOption} from '../services/translation';
 
+// Fixed regardless of which internal view (locale row vs. language
+// picker) or how many/few languages loaded - App.tsx's onLayout ->
+// reportContentHeight pipeline resizes the native IME window to match
+// whatever height gets reported, so if this varied with content (a
+// FlatList naturally shrinks to fit when it has few/zero rows), every
+// tap between the two views would visibly resize the keyboard window.
+const BAR_HEIGHT = 210;
+
 export function TranslationBar() {
   const {
     theme,
@@ -19,15 +27,23 @@ export function TranslationBar() {
   const [error, setError] = useState<string | null>(null);
   const [sourceLanguages, setSourceLanguages] = useState<LanguageOption[]>([]);
   const [targetLanguages, setTargetLanguages] = useState<LanguageOption[]>([]);
+  const [languagesError, setLanguagesError] = useState<string | null>(null);
   const [picker, setPicker] = useState<'source' | 'target' | null>(null);
 
   // Full, real language lists (not a fixed few) - fetched once per time
   // the bar opens rather than hardcoded, so they stay accurate as DeepL
-  // adds languages (see getLanguages).
+  // adds languages (see getLanguages). Surfacing a failure here (rather
+  // than swallowing it) matters - the picker otherwise just looks empty
+  // with no indication why, which reads as broken.
   useEffect(() => {
     if (!translationBarVisible) return;
-    getLanguages('source').then(setSourceLanguages).catch(() => {});
-    getLanguages('target').then(setTargetLanguages).catch(() => {});
+    setLanguagesError(null);
+    Promise.all([getLanguages('source'), getLanguages('target')])
+      .then(([sources, targets]) => {
+        setSourceLanguages(sources);
+        setTargetLanguages(targets);
+      })
+      .catch(() => setLanguagesError('Could not load languages - check the backend is configured'));
   }, [translationBarVisible]);
 
   const runTranslation = async (targetLocale: string, sourceLocale: string | null) => {
@@ -113,6 +129,11 @@ export function TranslationBar() {
               </TouchableOpacity>
             ) : null
           }
+          ListEmptyComponent={
+            <Text style={{color: theme.keyText, opacity: 0.7, padding: 10}}>
+              {languagesError ?? 'Loading languages…'}
+            </Text>
+          }
           renderItem={({item}) => (
             <TouchableOpacity
               style={styles.pickerRow}
@@ -135,7 +156,9 @@ export function TranslationBar() {
         </TouchableOpacity>
         <Text style={{color: theme.keyText, opacity: 0.6}}>→</Text>
         <TouchableOpacity style={styles.localePill} onPress={() => setPicker('target')}>
-          <Text style={{color: translateTargetLocale ? theme.keyText : theme.accent, fontWeight: translateTargetLocale ? '400' : '600'}} numberOfLines={1}>
+          <Text
+            style={{color: translateTargetLocale ? theme.keyText : theme.accent, fontWeight: translateTargetLocale ? '400' : '600'}}
+            numberOfLines={1}>
             {targetLabel}
           </Text>
         </TouchableOpacity>
@@ -144,26 +167,33 @@ export function TranslationBar() {
         </TouchableOpacity>
       </View>
 
-      {loading && <ActivityIndicator color={theme.accent} />}
-      {error && (
-        <Text style={{color: theme.keyText, opacity: 0.7, paddingVertical: 4}} numberOfLines={1}>
-          {error}
-        </Text>
-      )}
-
-      {translated && (
-        <TouchableOpacity onPress={applyTranslation} style={styles.resultRow}>
-          <Text style={{color: theme.keyText}} numberOfLines={2}>
-            {translated}
+      <View style={styles.bodyArea}>
+        {languagesError && (
+          <Text style={{color: theme.keyText, opacity: 0.7}} numberOfLines={2}>
+            {languagesError}
           </Text>
-        </TouchableOpacity>
-      )}
+        )}
+        {loading && <ActivityIndicator color={theme.accent} />}
+        {error && (
+          <Text style={{color: theme.keyText, opacity: 0.7, paddingVertical: 4}} numberOfLines={1}>
+            {error}
+          </Text>
+        )}
+        {translated && (
+          <TouchableOpacity onPress={applyTranslation} style={styles.resultRow}>
+            <Text style={{color: theme.keyText}} numberOfLines={4}>
+              {translated}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    height: BAR_HEIGHT,
     borderBottomWidth: 1,
     padding: 6,
   },
@@ -180,6 +210,10 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     paddingHorizontal: 8,
   },
+  bodyArea: {
+    flex: 1,
+    paddingTop: 4,
+  },
   resultRow: {
     marginTop: 4,
     paddingVertical: 4,
@@ -192,7 +226,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   pickerList: {
-    maxHeight: 200,
+    flex: 1,
   },
   pickerRow: {
     paddingHorizontal: 10,
