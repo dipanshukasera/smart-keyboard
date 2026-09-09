@@ -1,6 +1,5 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {translateText, getLanguages, LanguageOption} from '../services/translation';
@@ -12,6 +11,14 @@ import {translateText, getLanguages, LanguageOption} from '../services/translati
 // FlatList naturally shrinks to fit when it has few/zero rows), every
 // tap between the two views would visibly resize the keyboard window.
 const BAR_HEIGHT = 210;
+
+// How often to check text-before-cursor for changes while the bar is
+// open - there's no event we can subscribe to for "the focused app's
+// text changed" (typing happens through several different components -
+// KeyboardLayout, SymbolsNumberPanel, NumericPanel - and even a paste
+// wouldn't fire any of them), so this polls instead. Cheap local IPC
+// call, not a network request, so this cadence is not costly.
+const POLL_INTERVAL_MS = 600;
 
 export function TranslationBar() {
   const {
@@ -30,6 +37,16 @@ export function TranslationBar() {
   const [targetLanguages, setTargetLanguages] = useState<LanguageOption[]>([]);
   const [languagesError, setLanguagesError] = useState<string | null>(null);
   const [picker, setPicker] = useState<'source' | 'target' | null>(null);
+  // What was last sent for translation (or last seen as empty) - lets
+  // the poller below fire only on an actual change instead of
+  // re-translating identical text every tick.
+  const lastTextRef = useRef('');
+  // Guards against out-of-order network responses: with translation now
+  // firing repeatedly as text changes, a slower earlier request could
+  // otherwise resolve after a newer one and overwrite the display with
+  // stale text. Only the most recently *started* request is allowed to
+  // apply its result.
+  const requestIdRef = useRef(0);
 
   // Full, real language lists (not a fixed few) - fetched once per time
   // the bar opens rather than hardcoded, so they stay accurate as DeepL
@@ -47,33 +64,53 @@ export function TranslationBar() {
       .catch(() => setLanguagesError('Could not load languages - check the backend is configured'));
   }, [translationBarVisible]);
 
-  const runTranslation = async (targetLocale: string, sourceLocale: string | null) => {
+  const runTranslation = async (targetLocale: string, sourceLocale: string | null, textOverride?: string) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
-    setTranslated(null);
     setError(null);
     try {
-      const sourceText = await InputConnection.getTextBeforeCursor(200);
+      const sourceText = textOverride ?? (await InputConnection.getTextBeforeCursor(200));
+      lastTextRef.current = sourceText;
       if (!sourceText.trim()) {
-        setError('Type something, then tap ↻ to translate it');
+        if (requestId !== requestIdRef.current) return;
+        setTranslated(null);
+        setError('Type something to translate');
         return;
       }
       const result = await translateText(sourceText, targetLocale, sourceLocale);
+      if (requestId !== requestIdRef.current) return;
       setTranslated(result.text);
     } catch {
+      if (requestId !== requestIdRef.current) return;
+      setTranslated(null);
       setError('Translation failed');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  // A returning user already has a remembered target language - translate
-  // immediately when the bar opens instead of making them tap it again.
+  // Real-time translation: as long as the bar is open (not showing a
+  // language picker) and a target is chosen, poll for text changes and
+  // re-translate automatically - no "translate now" action needed. The
+  // immediate call covers opening the bar with an already-remembered
+  // target language (translate right away rather than waiting a tick).
   useEffect(() => {
-    if (translationBarVisible && translateTargetLocale) {
-      runTranslation(translateTargetLocale, translateSourceLocale);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [translationBarVisible]);
+    if (!translationBarVisible || !translateTargetLocale || picker) return;
+    let cancelled = false;
+    const poll = async () => {
+      const text = await InputConnection.getTextBeforeCursor(200);
+      if (cancelled || text === lastTextRef.current) return;
+      runTranslation(translateTargetLocale, translateSourceLocale, text);
+    };
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [translationBarVisible, translateTargetLocale, translateSourceLocale, picker]);
 
   if (!translationBarVisible) {
     return null;
@@ -98,16 +135,6 @@ export function TranslationBar() {
     InputConnection.commitText(translated);
     setTranslated(null);
     setTranslationBarVisible(false);
-  };
-
-  // The bar only ever translates a snapshot of text-before-cursor taken
-  // at one moment (bar opening, or picking a language) - nothing re-runs
-  // it as the user keeps typing, so this is the way to say "translate
-  // what I've typed *now*" without having to re-pick a language.
-  const retranslate = () => {
-    if (translateTargetLocale) {
-      runTranslation(translateTargetLocale, translateSourceLocale);
-    }
   };
 
   const sourceLabel = translateSourceLocale
@@ -173,11 +200,6 @@ export function TranslationBar() {
             {targetLabel}
           </Text>
         </TouchableOpacity>
-        {translateTargetLocale && (
-          <TouchableOpacity onPress={retranslate} style={styles.refreshButton} hitSlop={8}>
-            <Icon name="refresh" size={18} color={theme.keyText} />
-          </TouchableOpacity>
-        )}
         <TouchableOpacity onPress={() => setTranslationBarVisible(false)} style={styles.closeButton} hitSlop={8}>
           <Text style={{color: theme.keyText}}>✕</Text>
         </TouchableOpacity>
@@ -190,7 +212,7 @@ export function TranslationBar() {
           </Text>
         )}
         {loading && <ActivityIndicator color={theme.accent} />}
-        {error && (
+        {error && !loading && (
           <Text style={{color: theme.keyText, opacity: 0.7, paddingVertical: 4}} numberOfLines={2}>
             {error}
           </Text>
@@ -222,11 +244,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  refreshButton: {
-    marginLeft: 'auto',
-    paddingHorizontal: 8,
-  },
   closeButton: {
+    marginLeft: 'auto',
     paddingHorizontal: 8,
   },
   bodyArea: {
