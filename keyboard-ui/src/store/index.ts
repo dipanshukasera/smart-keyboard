@@ -47,6 +47,8 @@ const LEARN_FROM_TYPING_KEY = 'learn_from_typing';
 const LAYOUT_STYLE_KEY = 'layout_style';
 const CUSTOM_THEMES_KEY = 'custom_themes';
 const KEYBOARD_SIZE_SCALE_KEY = 'keyboard_size_scale';
+const TRANSLATE_SOURCE_LOCALE_KEY = 'translate_source_locale';
+const TRANSLATE_TARGET_LOCALE_KEY = 'translate_target_locale';
 
 interface KeyboardState {
   activeLocale: string;
@@ -61,6 +63,12 @@ interface KeyboardState {
   keyboardSizeScale: number;
   isShiftActive: boolean;
   translationBarVisible: boolean;
+  // DeepL language codes (e.g. "ES", "EN-US") remembered across sessions
+  // so the user doesn't have to re-pick a language pair every time they
+  // open the bar - null source means "auto-detect", null target means
+  // "nothing chosen yet" (the bar prompts for one).
+  translateSourceLocale: string | null;
+  translateTargetLocale: string | null;
   // The word currently being typed and its suggestions live here (not in
   // KeyboardLayout's own state) so the toolbar - a sibling component in
   // App.tsx - can collapse into a suggestion strip the same way Gboard's
@@ -109,6 +117,8 @@ interface KeyboardState {
   toggleShift: () => void;
   setShiftActive: (active: boolean) => void;
   setTranslationBarVisible: (visible: boolean) => void;
+  setTranslateSourceLocale: (locale: string | null) => void;
+  setTranslateTargetLocale: (locale: string | null) => void;
   setToolbarExpanded: (expanded: boolean) => void;
   updateTypedWord: (word: string) => void;
   learnWord: (word: string) => void;
@@ -136,6 +146,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   keyboardSizeScale: 1,
   isShiftActive: false,
   translationBarVisible: false,
+  translateSourceLocale: null,
+  translateTargetLocale: null,
   typedWord: '',
   suggestions: [],
   isToolbarExpanded: false,
@@ -195,6 +207,16 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   setShiftActive: active => set({isShiftActive: active}),
 
   setTranslationBarVisible: visible => set({translationBarVisible: visible}),
+
+  setTranslateSourceLocale: locale => {
+    set({translateSourceLocale: locale});
+    ThemeStorage.saveJSON(TRANSLATE_SOURCE_LOCALE_KEY, locale);
+  },
+
+  setTranslateTargetLocale: locale => {
+    set({translateTargetLocale: locale});
+    ThemeStorage.saveJSON(TRANSLATE_TARGET_LOCALE_KEY, locale);
+  },
 
   setToolbarExpanded: expanded => set({isToolbarExpanded: expanded}),
 
@@ -351,6 +373,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       layoutStyle,
       customThemes,
       keyboardSizeScale,
+      translateSourceLocale,
+      translateTargetLocale,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -362,6 +386,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<LayoutStyle>(LAYOUT_STYLE_KEY, 'qwerty'),
       ThemeStorage.loadJSON<KeyboardTheme[]>(CUSTOM_THEMES_KEY, []),
       ThemeStorage.loadJSON<number>(KEYBOARD_SIZE_SCALE_KEY, 1),
+      ThemeStorage.loadJSON<string | null>(TRANSLATE_SOURCE_LOCALE_KEY, null),
+      ThemeStorage.loadJSON<string | null>(TRANSLATE_TARGET_LOCALE_KEY, null),
     ]);
     set({
       activeLocale: locale,
@@ -374,6 +400,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       layoutStyle,
       customThemes,
       keyboardSizeScale,
+      translateSourceLocale,
+      translateTargetLocale,
     });
   },
 }));
