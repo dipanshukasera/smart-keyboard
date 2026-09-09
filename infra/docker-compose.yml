@@ -20,8 +20,6 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       GIF_PROVIDER: ${GIF_PROVIDER:-tenor}
       TENOR_API_KEY: ${TENOR_API_KEY:-}
-      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
-      RAPIDAPI_GIF_HOST: ${RAPIDAPI_GIF_HOST:-}
       KLIPY_APP_KEY: ${KLIPY_APP_KEY:-}
       GOOGLE_TRANSLATE_API_KEY: ${GOOGLE_TRANSLATE_API_KEY:-}
     depends_on:

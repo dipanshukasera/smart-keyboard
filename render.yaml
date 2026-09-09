@@ -25,9 +25,5 @@ services:
         sync: false
       - key: TENOR_API_KEY
         sync: false
-      - key: RAPIDAPI_KEY
-        sync: false
-      - key: RAPIDAPI_GIF_HOST
-        sync: false
       - key: GOOGLE_TRANSLATE_API_KEY
         sync: false

@@ -61,8 +61,8 @@ in React Native, hosted inside a minimal native Android shell.
   `InputConnection.getTextBeforeCursor`, then calls the backend's
   `/api/translate`, which proxies Google Cloud Translate.
 - **GIFs/stickers**: `GifStickerPanel` calls `/api/gif/search`, which proxies
-  whichever provider `GIF_PROVIDER` selects (Tenor, Giphy, or a RapidAPI-
-  hosted GIF search - see `services/gifProviders.js`). Selecting a result
+  whichever provider(s) `GIF_PROVIDER` selects (Tenor and/or Klipy - see
+  `services/gifProviders.js`). Selecting a result
   copies its URL to the clipboard rather than inserting rich content
   directly, since most host apps don't accept `InputConnection.commitContent`
   from third-party IMEs.

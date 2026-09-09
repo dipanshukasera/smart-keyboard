@@ -45,50 +45,6 @@ async function trendingTenor(limit) {
   }));
 }
 
-// A generic RapidAPI-hosted GIF search. RapidAPI mirrors several
-// equivalent GIF-search APIs under different hostnames with the same
-// request shape; point RAPIDAPI_GIF_HOST at whichever one you've
-// subscribed to (defaults to RapidAPI's Giphy mirror).
-async function searchRapidApi(query, limit) {
-  if (!process.env.RAPIDAPI_KEY) {
-    throw new ProviderNotConfiguredError('RAPIDAPI_KEY');
-  }
-  const host = process.env.RAPIDAPI_GIF_HOST || 'giphy.p.rapidapi.com';
-  const response = await axios.get(`https://${host}/query`, {
-    headers: {
-      'Content-Type': 'application/json',
-      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-      'X-RapidAPI-Host': host,
-    },
-  });
-  const items = response.data.data || response.data.results || [];
-  return items.map(item => ({
-    id: item.id,
-    previewUrl: item.images ? item.images.fixed_width_small.url : item.media_formats.tinygif.url,
-    fullUrl: item.images ? item.images.original.url : item.media_formats.gif.url,
-  }));
-}
-
-async function trendingRapidApi(limit) {
-  if (!process.env.RAPIDAPI_KEY) {
-    throw new ProviderNotConfiguredError('RAPIDAPI_KEY');
-  }
-  const host = process.env.RAPIDAPI_GIF_HOST || 'giphy.p.rapidapi.com';
-  const response = await axios.get(`https://${host}/gifs/trending`, {
-    params: {limit, rating: 'g'},
-    headers: {
-      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-      'X-RapidAPI-Host': host,
-    },
-  });
-  const items = response.data.data || response.data.results || [];
-  return items.map(item => ({
-    id: item.id,
-    previewUrl: item.images ? item.images.fixed_width_small.url : item.media_formats.tinygif.url,
-    fullUrl: item.images ? item.images.original.url : item.media_formats.gif.url,
-  }));
-}
-
 // Klipy's REST shape mirrors Tenor's (their own onboarding docs say to
 // swap tenor.googleapis.com for api.klipy.com), except the app key goes in
 // the URL path rather than a query param, and results come back nested
@@ -174,19 +130,17 @@ class ProviderNotConfiguredError extends Error {
 
 const PROVIDERS = {
   tenor: searchTenor,
-  rapidapi: searchRapidApi,
   klipy: searchKlipy,
 };
 
 const TRENDING_PROVIDERS = {
   tenor: trendingTenor,
-  rapidapi: trendingRapidApi,
   klipy: trendingKlipy,
 };
 
 // Only Klipy has a genuine Stickers library among the providers wired up
-// here - Tenor/RapidAPI's "stickers" are usually just GIFs re-tagged, not a
-// separate catalog, so they're left out rather than faked. Structured the
+// here - Tenor's "stickers" are usually just GIFs re-tagged, not a
+// separate catalog, so it's left out rather than faked. Structured the
 // same way as PROVIDERS/TRENDING_PROVIDERS so it plugs into the exact same
 // queryAllProviders/getConfiguredProviderNames pipeline, and any future
 // provider with real sticker support is just another entry here.
@@ -200,7 +154,6 @@ const STICKER_TRENDING_PROVIDERS = {
 
 const REQUIRED_ENV_VAR = {
   tenor: 'TENOR_API_KEY',
-  rapidapi: 'RAPIDAPI_KEY',
   klipy: 'KLIPY_APP_KEY',
 };
 
