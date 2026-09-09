@@ -1,0 +1,23 @@
+# Node / React Native
+node_modules/
+npm-debug.log*
+.metro-health-check*
+
+# Android / Gradle
+android-shell/.gradle/
+android-shell/local.properties
+android-shell/app/build/
+android-shell/build/
+*.apk
+*.ap_
+*.dex
+*.class
+
+# Env
+.env
+.env.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

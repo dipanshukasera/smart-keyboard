@@ -1,0 +1,18 @@
+pluginManagement {
+    includeBuild("../keyboard-ui/node_modules/@react-native/gradle-plugin")
+}
+
+plugins {
+    id("com.facebook.react.settings")
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+    ex.autolinkLibrariesFromCommand(
+        ["npx", "@react-native-community/cli", "config"],
+        file("../keyboard-ui")
+    )
+}
+
+rootProject.name = 'SmartKeyboard'
+include ':app'
+includeBuild("../keyboard-ui/node_modules/@react-native/gradle-plugin")

@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KeyboardLayout",
+  "description": "Schema for per-language key layout files under keyboard-ui/src/layouts/.",
+  "type": "object",
+  "required": ["locale", "displayName", "rows"],
+  "properties": {
+    "locale": {
+      "type": "string",
+      "description": "BCP-47 locale tag, e.g. en-US.",
+      "pattern": "^[a-z]{2,3}-[A-Z]{2}$"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {"$ref": "#/definitions/key"}
+      }
+    }
+  },
+  "definitions": {
+    "key": {
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": {"type": "string"},
+        "action": {
+          "type": "string",
+          "enum": ["shift", "delete", "space", "enter", "symbols", "emoji"]
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0.5,
+          "default": 1
+        }
+      }
+    }
+  }
+}

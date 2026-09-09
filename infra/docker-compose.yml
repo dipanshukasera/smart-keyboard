@@ -1,0 +1,31 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+      - ./db/init.js:/docker-entrypoint-initdb.d/init.js:ro
+
+  backend:
+    build:
+      context: ../backend/node-service
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+    environment:
+      PORT: 4000
+      MONGODB_URI: mongodb://mongo:27017/smart_keyboard
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      GIF_PROVIDER: ${GIF_PROVIDER:-tenor}
+      TENOR_API_KEY: ${TENOR_API_KEY:-}
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      RAPIDAPI_GIF_HOST: ${RAPIDAPI_GIF_HOST:-}
+      KLIPY_APP_KEY: ${KLIPY_APP_KEY:-}
+      GOOGLE_TRANSLATE_API_KEY: ${GOOGLE_TRANSLATE_API_KEY:-}
+    depends_on:
+      - mongo
+
+volumes:
+  mongo-data:

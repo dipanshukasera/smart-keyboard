@@ -1,0 +1,28 @@
+{
+  "locale": "hi-IN",
+  "displayName": "हिन्दी",
+  "rows": [
+    [
+      {"key": "ौ"}, {"key": "ै"}, {"key": "ा"}, {"key": "ी"}, {"key": "ू"},
+      {"key": "ब"}, {"key": "ह"}, {"key": "ग"}, {"key": "द"}, {"key": "ज"}
+    ],
+    [
+      {"key": "ो"}, {"key": "े"}, {"key": "्"}, {"key": "ि"}, {"key": "ु"},
+      {"key": "प"}, {"key": "र"}, {"key": "क"}, {"key": "त"}
+    ],
+    [
+      {"key": "shift", "action": "shift", "width": 1.5},
+      {"key": "ं"}, {"key": "म"}, {"key": "न"}, {"key": "व"},
+      {"key": "ल"}, {"key": "स"}, {"key": "य"},
+      {"key": "delete", "action": "delete", "width": 1.5}
+    ],
+    [
+      {"key": "123", "action": "symbols", "width": 1.5},
+      {"key": ",", "width": 1},
+      {"key": "😀", "action": "emoji", "width": 1},
+      {"key": "space", "action": "space", "width": 3},
+      {"key": "।", "width": 1},
+      {"key": "enter", "action": "enter", "width": 1.5}
+    ]
+  ]
+}

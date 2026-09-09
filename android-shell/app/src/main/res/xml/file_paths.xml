@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exposes only cache/gifs/ (where GifCommitModule downloads GIFs before
+     handing them to the host app) as content:// URIs - nothing else in the
+     app's storage is reachable through the FileProvider. -->
+<paths>
+    <cache-path name="gifs" path="gifs/" />
+</paths>

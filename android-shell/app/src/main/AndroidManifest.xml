@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- true so the Metro dev server (plain ws/http to 10.0.2.2) and local
+         backend are reachable during development. Before shipping a release
+         build, replace this with a network security config that allows
+         cleartext only for the dev host, or serve the backend over TLS and
+         set this back to false. -->
+    <application
+        android:name=".MainApplication"
+        android:label="Smart Keyboard"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true">
+
+        <!-- The IME service itself. This is what the OS binds to when the user
+             enables the keyboard in Settings > System > Languages & input. -->
+        <service
+            android:name=".ImeService"
+            android:label="Smart Keyboard"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <!-- Lets GifCommitModule hand a downloaded GIF file to the host app
+             (e.g. Instagram's DM compose box) as a content:// URI via
+             InputConnection.commitContent, instead of just a clipboard
+             paste that most chat apps won't accept as an actual GIF. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+</manifest>

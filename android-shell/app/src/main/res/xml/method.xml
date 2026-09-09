@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Declares the language subtypes this IME supports. Each subtype maps to one
+  of the JSON layouts under keyboard-ui/src/layouts/. The RN side reads the
+  currently active subtype via ThemeStorageModule/InputConnectionBridge and
+  picks the matching layout file.
+-->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="">
+    <subtype
+        android:label="English (US)"
+        android:imeSubtypeLocale="en_US"
+        android:imeSubtypeMode="keyboard"
+        android:subtypeId="0x656e5553" />
+    <subtype
+        android:label="Hindi"
+        android:imeSubtypeLocale="hi_IN"
+        android:imeSubtypeMode="keyboard"
+        android:subtypeId="0x68694958" />
+    <subtype
+        android:label="Español"
+        android:imeSubtypeLocale="es_ES"
+        android:imeSubtypeMode="keyboard"
+        android:subtypeId="0x65734553" />
+</input-method>

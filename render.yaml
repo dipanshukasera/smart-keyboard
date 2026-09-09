@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: smart-keyboard-backend
+    runtime: docker
+    plan: free
+    rootDir: backend/node-service
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # GIF_PROVIDER picks which provider(s) gifProviders.js queries -
+      # Klipy is what's actually configured/working today (see the
+      # KLIPY_APP_KEY comment in backend/node-service/.env.example).
+      - key: GIF_PROVIDER
+        value: klipy
+      # Secrets - marked sync:false so Render prompts for them in the
+      # dashboard instead of storing them in this file (which is
+      # committed to the repo). Leave MONGODB_URI unset unless you've
+      # set up a database (e.g. MongoDB Atlas's free tier) - the server
+      # starts fine without it, only the theme/user-sync routes need it.
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: KLIPY_APP_KEY
+        sync: false
+      - key: TENOR_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_GIF_HOST
+        sync: false
+      - key: GOOGLE_TRANSLATE_API_KEY
+        sync: false

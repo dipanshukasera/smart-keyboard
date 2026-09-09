@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KeyboardTheme",
+  "description": "Schema for a keyboard theme, matching keyboard-ui/src/themes/themeTypes.ts and backend/node-service/src/models/Theme.js.",
+  "type": "object",
+  "required": ["name", "keyBackground", "keyText", "panelBackground", "accent"],
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "keyBackground": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "keyPressedBackground": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "keyText": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "panelBackground": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "accent": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "isDark": {"type": "boolean", "default": false}
+  }
+}

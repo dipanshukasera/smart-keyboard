@@ -1,0 +1,48 @@
+apply plugin: "com.android.application"
+apply plugin: "com.facebook.react"
+
+react {
+    root = file("../../keyboard-ui")
+    reactNativeDir = file("../../keyboard-ui/node_modules/react-native")
+}
+
+android {
+    namespace "com.yourco.keyboard"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.yourco.keyboard"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        release {
+            // Signed with the debug key so it installs on a device/emulator
+            // without a real release keystore. Do not ship a build signed
+            // this way - generate a proper release keystore first.
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+}
+
+dependencies {
+    implementation "com.facebook.react:react-android"
+    implementation "com.facebook.react:hermes-android"
+    implementation "androidx.appcompat:appcompat:1.7.0"
+    // InputConnectionCompat / InputContentInfoCompat (commitContent) and FileProvider.
+    implementation "androidx.core:core:1.13.1"
+}

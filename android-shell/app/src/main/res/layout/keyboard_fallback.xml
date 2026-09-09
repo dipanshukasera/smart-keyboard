@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rarely touched: shown only if the RN bundle fails to load, so the user
+     still has a minimal way to type instead of a blank keyboard. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Keyboard failed to load. Tap to retry."
+        android:id="@+id/fallback_message" />
+</LinearLayout>

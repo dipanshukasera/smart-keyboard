@@ -1,0 +1,161 @@
+package com.yourco.keyboard;
+
+import android.content.ClipDescription;
+import android.net.Uri;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import androidx.core.content.FileProvider;
+import androidx.core.view.inputmethod.EditorInfoCompat;
+import androidx.core.view.inputmethod.InputConnectionCompat;
+import androidx.core.view.inputmethod.InputContentInfoCompat;
+import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReactContextBaseJavaModule;
+import com.facebook.react.bridge.ReactMethod;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.security.MessageDigest;
+
+/**
+ * Sends a GIF directly into the focused field via InputConnection.commitContent
+ * (InputConnectionCompat so it degrades gracefully on older API levels)
+ * instead of just copying its URL to the clipboard. This is exactly how
+ * Gboard/SwiftKey send GIFs into apps like Instagram DMs, WhatsApp, or
+ * Telegram - the *target* field has to opt in by declaring an accepted
+ * content MIME type in its EditorInfo, which is why isRichContentSupported
+ * exists: not every text field does, and GifStickerPanel falls back to the
+ * clipboard when it doesn't.
+ */
+public class GifCommitModule extends ReactContextBaseJavaModule {
+
+    GifCommitModule(ReactApplicationContext reactContext) {
+        super(reactContext);
+    }
+
+    @Override
+    public String getName() {
+        return "GifCommitModule";
+    }
+
+    @ReactMethod
+    public void isRichContentSupported(Promise promise) {
+        promise.resolve(currentFieldAcceptsGif());
+    }
+
+    // Downloads (or reuses an already-cached copy of) any GIF/thumbnail URL
+    // so it can be shown/re-sent later with zero network - this is what
+    // backs the "Recently Used" section, which stays populated and usable
+    // offline once a GIF has been viewed at least once.
+    @ReactMethod
+    public void cacheGif(String remoteUrl, Promise promise) {
+        new Thread(() -> {
+            try {
+                File localFile = downloadToCache(remoteUrl);
+                promise.resolve(Uri.fromFile(localFile).toString());
+            } catch (Exception e) {
+                promise.reject("GIF_CACHE_FAILED", e.getMessage(), e);
+            }
+        }).start();
+    }
+
+    @ReactMethod
+    public void commitGif(String remoteUrl, Promise promise) {
+        new Thread(() -> {
+            try {
+                InputConnection ic = InputConnectionHolder.get();
+                EditorInfo info = InputConnectionHolder.editorInfo();
+                if (ic == null || info == null) {
+                    promise.resolve(false);
+                    return;
+                }
+                if (!acceptsGif(info)) {
+                    promise.resolve(false);
+                    return;
+                }
+
+                // Recently Used entries pass back a local "file://" URI
+                // (already cached from an earlier view) instead of a
+                // remote URL - skip the redundant download in that case.
+                File localFile = remoteUrl.startsWith("file://")
+                        ? new File(Uri.parse(remoteUrl).getPath())
+                        : downloadToCache(remoteUrl);
+                Uri contentUri = FileProvider.getUriForFile(
+                        getReactApplicationContext(),
+                        getReactApplicationContext().getPackageName() + ".fileprovider",
+                        localFile);
+
+                // Offering both the exact type and the wildcard maximizes
+                // compatibility with receivers that match strictly against
+                // whichever one they declared in EditorInfo.contentMimeTypes.
+                InputContentInfoCompat contentInfo = new InputContentInfoCompat(
+                        contentUri,
+                        new ClipDescription("GIF", new String[]{"image/gif", "image/*"}),
+                        null);
+
+                boolean sent = InputConnectionCompat.commitContent(
+                        ic,
+                        info,
+                        contentInfo,
+                        InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+                        null);
+
+                promise.resolve(sent);
+            } catch (Exception e) {
+                promise.reject("GIF_COMMIT_FAILED", e.getMessage(), e);
+            }
+        }).start();
+    }
+
+    private boolean currentFieldAcceptsGif() {
+        EditorInfo info = InputConnectionHolder.editorInfo();
+        return info != null && acceptsGif(info);
+    }
+
+    private boolean acceptsGif(EditorInfo info) {
+        String[] mimeTypes = EditorInfoCompat.getContentMimeTypes(info);
+        for (String type : mimeTypes) {
+            if ("image/gif".equalsIgnoreCase(type) || "image/*".equalsIgnoreCase(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private File downloadToCache(String remoteUrl) throws Exception {
+        File cacheDir = new File(getReactApplicationContext().getCacheDir(), "gifs");
+        if (!cacheDir.exists()) {
+            cacheDir.mkdirs();
+        }
+        File outFile = new File(cacheDir, sha1(remoteUrl) + ".gif");
+        if (outFile.exists()) {
+            return outFile;
+        }
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(remoteUrl).openConnection();
+        connection.setConnectTimeout(10000);
+        connection.setReadTimeout(15000);
+        try (InputStream in = connection.getInputStream();
+             FileOutputStream out = new FileOutputStream(outFile)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        } finally {
+            connection.disconnect();
+        }
+        return outFile;
+    }
+
+    private String sha1(String input) throws Exception {
+        byte[] hash = MessageDigest.getInstance("SHA-1").digest(input.getBytes("UTF-8"));
+        StringBuilder hex = new StringBuilder();
+        for (byte b : hash) {
+            hex.append(String.format("%02x", b));
+        }
+        return hex.toString();
+    }
+}
