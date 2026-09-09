@@ -118,6 +118,25 @@ public class KeyboardReactView {
         return reactRootView;
     }
 
+    // Without these, ReactInstanceManager's lifecycle state never leaves
+    // BEFORE_RESUME (nothing else ever calls onHostResume for an IME -
+    // there's no Activity#onResume to hook), and JS's setInterval/
+    // setTimeout stop repeating after their very first tick: RN's Timing
+    // module drives *repeat* scheduling off a Choreographer frame-callback
+    // loop that only runs once the instance is actually RESUMED - the
+    // first callback still fires (it's a plain postDelayed under the
+    // hood), but nothing ever reschedules the next one. A real Activity
+    // gets this for free from ReactActivityDelegate; an IME has to call it
+    // itself, tied to the window's own visibility instead (see
+    // ImeService's onWindowShown/onWindowHidden).
+    void onResume() {
+        reactInstanceManager.onHostResume(null);
+    }
+
+    void onPause() {
+        reactInstanceManager.onHostPause(null);
+    }
+
     void destroy() {
         if (reactRootView != null) {
             reactRootView.unmountReactApplication();

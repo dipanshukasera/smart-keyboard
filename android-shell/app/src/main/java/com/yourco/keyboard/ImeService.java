@@ -28,6 +28,22 @@ public class ImeService extends InputMethodService {
     }
 
     @Override
+    public void onWindowShown() {
+        super.onWindowShown();
+        if (keyboardReactView != null) {
+            keyboardReactView.onResume();
+        }
+    }
+
+    @Override
+    public void onWindowHidden() {
+        super.onWindowHidden();
+        if (keyboardReactView != null) {
+            keyboardReactView.onPause();
+        }
+    }
+
+    @Override
     public void onStartInput(EditorInfo info, boolean restarting) {
         super.onStartInput(info, restarting);
         // onStartInput fires for every field-focus change, including
