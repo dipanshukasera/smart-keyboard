@@ -7,8 +7,17 @@
 # release APK" for details.
 #
 # Usage:
-#   ./build-apk.sh            # refresh backend + build APK + copy
-#   ./build-apk.sh --install  # ...+ ensure an emulator is running + adb install -r
+#   ./build-apk.sh                    # refresh backend + build APK + copy
+#   ./build-apk.sh --install          # ...+ ensure an emulator is running + adb install -r
+#   ./build-apk.sh --install --local  # ...+ point the app at the LOCAL backend
+#
+# --local builds against http://10.0.2.2:4000 (the emulator's alias for this
+# machine) instead of the deployed backend. Worth using for any on-device
+# testing: the deployed service is on Render's free tier, which spins down
+# when idle and then takes 30-50s to answer the first request, so GIF and
+# translation calls appear to hang or fail after any quiet period. The edit
+# to api.ts is reverted automatically when this script exits, including on
+# failure, so a --local build can't leak into a commit.
 #
 # --install auto-launches the project's AVD if no device/emulator is
 # already connected (started before the build even begins, so its ~30-90s
@@ -94,8 +103,67 @@ wait_for_emulator_ready() {
   echo "==> Device/emulator ready"
 }
 
-if [ "${1:-}" = "--install" ]; then
+DO_INSTALL=0
+USE_LOCAL_BACKEND=0
+for arg in "$@"; do
+  case "$arg" in
+    --install) DO_INSTALL=1 ;;
+    --local) USE_LOCAL_BACKEND=1 ;;
+    *)
+      echo "error: unknown option '$arg' (expected --install and/or --local)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ "$DO_INSTALL" = "1" ]; then
   ensure_emulator_starting
+fi
+
+# --- JS dependencies -------------------------------------------------------
+# Gradle bundles whatever is in keyboard-ui/node_modules; it does not install
+# it. Two things break silently when that tree is missing or stale:
+#   * patch-package runs from keyboard-ui's postinstall, and react-native-video
+#     needs its patch to work inside an IME at all (it otherwise resolves an
+#     Activity during player init, which a keyboard doesn't have).
+#   * a newly added native module won't exist for autolinking to find.
+if [ ! -d "keyboard-ui/node_modules" ] || [ "keyboard-ui/package.json" -nt "keyboard-ui/node_modules" ]; then
+  echo "==> Installing JS dependencies (keyboard-ui)"
+  npm --prefix keyboard-ui install
+fi
+
+# Verify the patch actually landed rather than trusting that postinstall ran -
+# an `npm install <pkg>` in the past could have overwritten the patched files
+# without re-running it.
+PATCHED_FILE="keyboard-ui/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/PictureInPictureUtil.kt"
+if [ -f "$PATCHED_FILE" ] && ! grep -q "patches/react-native-video" "$PATCHED_FILE"; then
+  echo "==> Re-applying node_modules patches (patch-package)"
+  (cd keyboard-ui && npx patch-package)
+fi
+
+# --- Autolinking cache -----------------------------------------------------
+# The generated autolinking manifest is treated as up-to-date by Gradle, so
+# it can outlive the dependency list it was generated from. A stale one lists
+# fewer modules than are installed, and the mismatch is invisible: the build
+# succeeds and the missing module only shows up at runtime as "Cannot read
+# property 'bubblingEventTypes' of null" for its components.
+rm -rf android-shell/build/generated/autolinking android-shell/app/build/generated/autolinking
+
+# --- Backend URL -----------------------------------------------------------
+API_TS="keyboard-ui/src/services/api.ts"
+if [ "$USE_LOCAL_BACKEND" = "1" ]; then
+  if [ ! -f "$API_TS" ]; then
+    echo "error: $API_TS not found - cannot switch the backend URL." >&2
+    exit 1
+  fi
+  cp "$API_TS" "$API_TS.prebuild"
+  # Restored on any exit path, so an interrupted --local build doesn't leave
+  # a localhost URL behind in the working tree.
+  trap 'mv -f "$API_TS.prebuild" "$API_TS" 2>/dev/null || true' EXIT
+  sed -i '' 's/^export const API_BASE_URL = DEPLOYED_BACKEND;/export const API_BASE_URL = LOCAL_BACKEND;/' "$API_TS"
+  echo "==> Building against LOCAL backend (http://10.0.2.2:4000)"
+else
+  echo "==> Building against the deployed backend"
 fi
 
 if [ -f "infra/docker-compose.yml" ]; then
@@ -138,7 +206,7 @@ fi
 cp "$BUILT_APK" smart-keyboard.apk
 echo "==> Copied to $SCRIPT_DIR/smart-keyboard.apk"
 
-if [ "${1:-}" = "--install" ]; then
+if [ "$DO_INSTALL" = "1" ]; then
   wait_for_emulator_ready
   echo "==> Installing on connected device/emulator ($ADB_BIN)"
   "$ADB_BIN" install -r smart-keyboard.apk

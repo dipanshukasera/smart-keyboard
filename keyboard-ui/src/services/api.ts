@@ -28,7 +28,11 @@ export const API_BASE_URL = DEPLOYED_BACKEND;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 45000,
+  // A cold start was measured taking the full 45s this used to allow, which
+  // surfaced as GIF/translation simply failing after any idle period. 75s
+  // leaves headroom above the observed 30-50s wake time - slow, but a slow
+  // first request beats a failed one.
+  timeout: 75000,
   headers: {
     'Content-Type': 'application/json',
   },
