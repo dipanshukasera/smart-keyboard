@@ -13,7 +13,8 @@ export type PanelType =
   | 'themeCustomizer'
   | 'clipboard'
   | 'learnedWords'
-  | 'numericPad';
+  | 'numericPad'
+  | 'translate';
 export type OneHandedMode = 'off' | 'left' | 'right';
 
 export interface ClipboardEntry {
@@ -62,7 +63,6 @@ interface KeyboardState {
   // support this.
   keyboardSizeScale: number;
   isShiftActive: boolean;
-  translationBarVisible: boolean;
   // DeepL language codes (e.g. "ES", "EN-US") remembered across sessions
   // so the user doesn't have to re-pick a language pair every time they
   // open the bar - null source means "auto-detect", null target means
@@ -116,7 +116,6 @@ interface KeyboardState {
   setKeyboardSizeScale: (scale: number) => void;
   toggleShift: () => void;
   setShiftActive: (active: boolean) => void;
-  setTranslationBarVisible: (visible: boolean) => void;
   setTranslateSourceLocale: (locale: string | null) => void;
   setTranslateTargetLocale: (locale: string | null) => void;
   setToolbarExpanded: (expanded: boolean) => void;
@@ -145,7 +144,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   layoutStyle: 'qwerty',
   keyboardSizeScale: 1,
   isShiftActive: false,
-  translationBarVisible: false,
   translateSourceLocale: null,
   translateTargetLocale: null,
   typedWord: '',
@@ -205,8 +203,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
 
   toggleShift: () => set({isShiftActive: !get().isShiftActive}),
   setShiftActive: active => set({isShiftActive: active}),
-
-  setTranslationBarVisible: visible => set({translationBarVisible: visible}),
 
   setTranslateSourceLocale: locale => {
     set({translateSourceLocale: locale});

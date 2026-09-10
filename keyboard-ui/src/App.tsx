@@ -15,7 +15,7 @@ import {EmojiPanel} from './components/EmojiPanel';
 import {GifStickerPanel} from './components/GifStickerPanel';
 import {SymbolsNumberPanel} from './components/SymbolsNumberPanel';
 import {LanguageSwitcher} from './components/LanguageSwitcher';
-import {TranslationBar} from './components/TranslationBar';
+import {TranslationPanel} from './components/TranslationPanel';
 import {ThemeCustomizer} from './components/ThemeCustomizer';
 import {ClipboardPanel} from './components/ClipboardPanel';
 import {LearnedWordsPanel} from './components/LearnedWordsPanel';
@@ -28,8 +28,6 @@ export default function App() {
   const {
     activePanel,
     setActivePanel,
-    translationBarVisible,
-    setTranslationBarVisible,
     theme,
     hydrate,
     suggestions,
@@ -120,6 +118,8 @@ export default function App() {
         return <EmojiPanel />;
       case 'gif':
         return <GifStickerPanel />;
+      case 'translate':
+        return <TranslationPanel />;
       case 'symbols':
         return <SymbolsNumberPanel />;
       case 'themeCustomizer':
@@ -151,8 +151,6 @@ export default function App() {
   return (
     <View style={[styles.root, {backgroundColor: theme.panelBackground}]}>
       <View onLayout={handleContentLayout}>
-        {!isNumericPad && <TranslationBar />}
-
         {!isNumericPad && (
         <View style={styles.toolbar}>
           {showSuggestionStrip ? (
@@ -184,11 +182,7 @@ export default function App() {
                 textStyle={styles.gifLabel}
               />
               <ToolbarIcon iconName="content-paste" onPress={openClipboardPanel} theme={theme} />
-              <ToolbarIcon
-                iconName="translate"
-                onPress={() => setTranslationBarVisible(!translationBarVisible)}
-                theme={theme}
-              />
+              <ToolbarIcon iconName="translate" onPress={() => setActivePanel('translate')} theme={theme} />
               <ToolbarIcon iconName="palette" onPress={() => setActivePanel('themeCustomizer')} theme={theme} />
             </>
           )}
