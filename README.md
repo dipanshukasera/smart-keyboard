@@ -89,3 +89,8 @@ To run the bash file
 ````
 ./build-apk.sh --install
 ```
+
+`````
+logs
+docker compose -f infra/docker-compose.yml logs -f backend
+`````
