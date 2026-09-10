@@ -147,11 +147,16 @@ export default function App() {
   // surface; a numeric field is single-purpose and Gboard doesn't show
   // its icon row there either.
   const isNumericPad = activePanel === 'numericPad';
+  // The translate panel has its own top bar (the language-pair pills,
+  // with its own way back to the keyboard) - the generic icon toolbar
+  // would just be redundant chrome sitting above it instead of the pills
+  // being the first thing shown, merged directly into the keyboard.
+  const hideGenericToolbar = isNumericPad || activePanel === 'translate';
 
   return (
     <View style={[styles.root, {backgroundColor: theme.panelBackground}]}>
       <View onLayout={handleContentLayout}>
-        {!isNumericPad && (
+        {!hideGenericToolbar && (
         <View style={styles.toolbar}>
           {showSuggestionStrip ? (
             <>

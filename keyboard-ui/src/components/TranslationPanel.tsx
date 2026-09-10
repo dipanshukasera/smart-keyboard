@@ -153,6 +153,15 @@ export function TranslationPanel() {
   return (
     <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
       <View style={styles.pillRow}>
+        {/* The generic toolbar (with its own "back to ABC" icon) is
+            hidden for this panel - see App.tsx's hideGenericToolbar -
+            so this is the only way back to the normal keyboard. */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => setActivePanel('keyboard')}
+          hitSlop={8}>
+          <Icon name="keyboard" size={20} color={theme.keyText} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.pill, {backgroundColor: theme.keyBackground}]}
           onPress={() => setPicker('source')}>
@@ -263,6 +272,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
+    position: 'relative',
   },
   pill: {
     flexShrink: 1,
@@ -273,6 +283,12 @@ const styles = StyleSheet.create({
   },
   pillArrow: {
     marginHorizontal: 8,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 8,
+    padding: 6,
+    zIndex: 1,
   },
   inputBox: {
     borderWidth: 1,
