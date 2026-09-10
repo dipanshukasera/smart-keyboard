@@ -11,9 +11,19 @@ services:
   backend:
     build:
       context: ../backend/node-service
+      # The Dockerfile's last stage is the production one (that's what
+      # render.yaml deploys) - local dev explicitly opts into the nodemon
+      # stage instead.
+      target: dev
     restart: unless-stopped
     ports:
       - '4000:4000'
+    volumes:
+      # Live source: nodemon inside the container restarts on save, so
+      # adding a console.log no longer needs `up --build`. Only src/ is
+      # mounted - node_modules stays the container's own (the host's are
+      # built for macOS/arm64 and would break the alpine runtime).
+      - ../backend/node-service/src:/app/src
     environment:
       PORT: 4000
       MONGODB_URI: mongodb://mongo:27017/smart_keyboard
@@ -22,6 +32,10 @@ services:
       TENOR_API_KEY: ${TENOR_API_KEY:-}
       KLIPY_APP_KEY: ${KLIPY_APP_KEY:-}
       DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      # Server-side kill switch for /api/gif/adult/search. Defaults to off
+      # here as well as in the code; the user-facing "Adult GIFs" setting
+      # in the keyboard has no effect until this is "true".
+      ENABLE_ADULT_GIFS: ${ENABLE_ADULT_GIFS:-false}
     depends_on:
       - mongo
 

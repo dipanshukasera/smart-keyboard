@@ -12,9 +12,17 @@ const axios = require('axios');
  * or set it to "all" to use everything configured.
  */
 
-async function searchTenor(query, limit) {
+// Tenor pages by opaque cursor (the `next` string from the previous
+// response fed back as `pos`), not by page number, so a page number can't
+// be turned into a request the way Klipy's and Redgifs' can. Rather than
+// re-request page 1 and hand back duplicates of what the grid already
+// shows, later pages return nothing from this provider.
+async function searchTenor(query, limit, page = 1) {
   if (!process.env.TENOR_API_KEY) {
     throw new ProviderNotConfiguredError('TENOR_API_KEY');
+  }
+  if (page > 1) {
+    return [];
   }
   const response = await axios.get('https://tenor.googleapis.com/v2/search', {
     params: {
@@ -73,13 +81,13 @@ function mapKlipyItem(item) {
   };
 }
 
-async function searchKlipy(query, limit) {
+async function searchKlipy(query, limit, page = 1) {
   if (!process.env.KLIPY_APP_KEY) {
     throw new ProviderNotConfiguredError('KLIPY_APP_KEY');
   }
   const response = await axios.get(
     `https://api.klipy.com/api/v1/${process.env.KLIPY_APP_KEY}/gifs/search`,
-    {params: {q: query, per_page: limit}},
+    {params: {q: query, per_page: limit, page}},
   );
   return response.data.data.data.map(mapKlipyItem);
 }
@@ -98,13 +106,13 @@ async function trendingKlipy(limit) {
 // Klipy also has a genuinely separate Stickers library (not just GIFs
 // tagged as stickers) - same auth/response shape, different path. See
 // docs.klipy.com/stickers-api.
-async function searchKlipyStickers(query, limit) {
+async function searchKlipyStickers(query, limit, page = 1) {
   if (!process.env.KLIPY_APP_KEY) {
     throw new ProviderNotConfiguredError('KLIPY_APP_KEY');
   }
   const response = await axios.get(
     `https://api.klipy.com/api/v1/${process.env.KLIPY_APP_KEY}/stickers/search`,
-    {params: {q: query, per_page: limit}},
+    {params: {q: query, per_page: limit, page}},
   );
   return response.data.data.data.map(mapKlipyItem);
 }
@@ -120,6 +128,105 @@ async function trendingKlipyStickers(limit) {
   return response.data.data.data.map(mapKlipyItem);
 }
 
+// Adult GIFs, served by Redgifs' public v2 API. Unlike every other
+// provider this one has no API key to gate on, so it's gated on the
+// explicit ENABLE_ADULT_GIFS opt-in instead (see adultGifsEnabled) and
+// lives only in ADULT_PROVIDERS - deliberately never in PROVIDERS, so it
+// cannot be interleaved into the ordinary GIF grid by queryAllProviders.
+// Reaching it requires both the server opt-in and the user turning
+// "Adult GIFs" on in the keyboard's own settings.
+//
+// Replaced pornsearch@0.3.1, which was unusable: it scraped markup that
+// had since changed and returned entries whose href was undefined
+// ("http://dl.phncdn.comundefined.gif"), and its own cheerio dependency
+// was never declared so it couldn't even be required.
+const REDGIFS_API = 'https://api.redgifs.com/v2';
+// The temporary token below is bound to the User-Agent that requested it
+// (see the valid_agent claim inside the JWT), so auth and search have to
+// present the same one or the search comes back 401.
+const REDGIFS_USER_AGENT = 'SmartKeyboard/0.1';
+
+let redgifsToken = null;
+let redgifsTokenExpiresAt = 0;
+
+// Redgifs hands out anonymous bearer tokens - no account or dashboard
+// key - but they expire, so this caches one and re-fetches on demand
+// rather than authenticating on every search.
+async function getRedgifsToken(forceRefresh = false) {
+  if (!forceRefresh && redgifsToken && Date.now() < redgifsTokenExpiresAt) {
+    return redgifsToken;
+  }
+  const response = await axios.get(`${REDGIFS_API}/auth/temporary`, {
+    headers: {'User-Agent': REDGIFS_USER_AGENT},
+  });
+  redgifsToken = response.data.token;
+  // Observed lifetime is ~24h; refreshing at 12h avoids parsing the JWT
+  // just to read its exp claim.
+  redgifsTokenExpiresAt = Date.now() + 12 * 60 * 60 * 1000;
+  return redgifsToken;
+}
+
+// Most Redgifs entries are video (type 1: urls.sd/hd are .mp4, with .jpg
+// only in poster/thumbnail); type 2 entries are stills. Redgifs serves no
+// GIF/WebP variant at all - those URLs 403 - so animation here can only
+// come from the mp4.
+//
+// previewUrl/fullUrl therefore stay image-only (every other provider's
+// results are images, and the offline cache and clipboard fallback both
+// assume that), and the mp4 is carried alongside as videoUrl. Only this
+// provider ever sets that field; GifStickerPanel plays it for the 18+ tab
+// and GifCommitModule sends it when the target field accepts video.
+const IMAGE_URL_PATTERN = /\.(jpe?g|png|gif|webp)(\?|$)/i;
+const VIDEO_URL_PATTERN = /\.(mp4|m4v|webm)(\?|$)/i;
+
+function mapRedgifsItem(item) {
+  const urls = item?.urls || {};
+  const preview = [urls.thumbnail, urls.poster, urls.sd, urls.hd].find(url => IMAGE_URL_PATTERN.test(url || ''));
+  const full = [urls.poster, urls.hd, urls.sd, urls.thumbnail].find(url => IMAGE_URL_PATTERN.test(url || ''));
+  if (!preview || !full) {
+    return null;
+  }
+  // "silent" first: the grid autoplays these muted and looping, so the
+  // audio track is dead weight over mobile data. sd before hd for the
+  // same reason - a thumbnail-sized tile doesn't need the large encode.
+  const video = [urls.silent, urls.sd, urls.hd].find(url => VIDEO_URL_PATTERN.test(url || ''));
+  return {id: String(item.id), previewUrl: preview, fullUrl: full, videoUrl: video ?? null};
+}
+
+async function searchAdultGifsProvider(query, limit, page = 1) {
+  const request = async token =>
+    axios.get(`${REDGIFS_API}/gifs/search`, {
+      params: {search_text: query, count: Math.min(limit, 80), page},
+      headers: {Authorization: `Bearer ${token}`, 'User-Agent': REDGIFS_USER_AGENT},
+    });
+
+  let response;
+  try {
+    response = await request(await getRedgifsToken());
+  } catch (error) {
+    // A cached token that expired early (or was invalidated) reads as a
+    // 401 - retry once with a fresh one before giving up, so a stale
+    // token doesn't surface to the user as a dead feature.
+    if (error.response?.status !== 401) {
+      throw error;
+    }
+    response = await request(await getRedgifsToken(true));
+  }
+
+  return (response.data.gifs || []).map(mapRedgifsItem).filter(Boolean);
+}
+
+/**
+ * Server-side kill switch for the adult provider, independent of the
+ * per-user keyboard setting. Off unless explicitly set to "true", so a
+ * deployment that never sets it (see render.yaml) can't serve this at all
+ * no matter what a client asks for. A bare truthy check would treat
+ * ENABLE_ADULT_GIFS=false as enabled, hence the exact comparison.
+ */
+function adultGifsEnabled() {
+  return String(process.env.ENABLE_ADULT_GIFS).toLowerCase() === 'true';
+}
+
 class ProviderNotConfiguredError extends Error {
   constructor(missingEnvVar) {
     super(`GIF provider is not configured (missing ${missingEnvVar})`);
@@ -128,9 +235,28 @@ class ProviderNotConfiguredError extends Error {
   }
 }
 
+// Distinct from ProviderNotConfiguredError so the route can answer 403
+// ("switched off here") rather than 503 ("misconfigured") - and so an
+// empty result set stays distinguishable from the feature being disabled.
+class AdultContentDisabledError extends Error {
+  constructor() {
+    super('Adult GIF search is disabled on this server (ENABLE_ADULT_GIFS is not "true")');
+    this.name = 'AdultContentDisabledError';
+  }
+}
+
 const PROVIDERS = {
   tenor: searchTenor,
   klipy: searchKlipy,
+};
+
+// Kept out of PROVIDERS on purpose - queryAllProviders interleaves every
+// map it's given into one grid, so anything listed there shows up in the
+// ordinary GIF search. This map is only ever reached through
+// searchAdultGifs, behind both ENABLE_ADULT_GIFS and the user's own
+// keyboard setting.
+const ADULT_PROVIDERS = {
+  adult: searchAdultGifsProvider,
 };
 
 const TRENDING_PROVIDERS = {
@@ -188,8 +314,13 @@ function interleave(groups) {
 // with it, so a per-provider failure is swallowed here (not thrown) as
 // long as at least one provider succeeds - only throws when literally
 // nothing is configured, or every configured provider's request failed.
-async function queryAllProviders(fnMap, args, limit) {
-  const names = getConfiguredProviderNames(Object.keys(fnMap));
+async function queryAllProviders(fnMap, args, limit, {requireApiKey = true, page = 1} = {}) {
+  // requireApiKey: false is for provider maps whose gate isn't an API key
+  // (ADULT_PROVIDERS, gated on ENABLE_ADULT_GIFS + the user's setting).
+  // Those also skip GIF_PROVIDER, which selects between the ordinary GIF
+  // providers and shouldn't double as an on/off switch for a separate
+  // content library.
+  const names = requireApiKey ? getConfiguredProviderNames(Object.keys(fnMap)) : Object.keys(fnMap);
   if (names.length === 0) {
     throw new ProviderNotConfiguredError(Object.values(REQUIRED_ENV_VAR).join(' or '));
   }
@@ -197,7 +328,9 @@ async function queryAllProviders(fnMap, args, limit) {
   const perProviderLimit = Math.max(8, Math.ceil(limit / names.length));
   const settled = await Promise.allSettled(
     names.map(async name => {
-      const items = await fnMap[name](...args, perProviderLimit);
+      // page is appended after the limit, so providers that don't paginate
+      // can simply ignore the extra argument.
+      const items = await fnMap[name](...args, perProviderLimit, page);
       // Provider-prefixed so ids stay unique once merged (two different
       // providers can otherwise hand back colliding raw ids) - React's
       // keyExtractor and the offline GIF cache both rely on this.
@@ -217,6 +350,13 @@ async function queryAllProviders(fnMap, args, limit) {
     }
   }
 
+  // A partial failure is swallowed on purpose (see above) but silently
+  // swallowing it left no way to tell a degraded provider from a healthy
+  // one - the response still looks fine, just with fewer results.
+  if (failed.length > 0 && succeeded.length > 0) {
+    console.warn(`GIF provider(s) failed but others succeeded [ok: ${succeeded.join(', ')}]: ${failed.join('; ')}`);
+  }
+
   if (succeeded.length === 0) {
     const error = new Error(`All configured GIF providers failed (${names.join(', ')}): ${failed.join('; ')}`);
     error.allFailed = true;
@@ -226,8 +366,31 @@ async function queryAllProviders(fnMap, args, limit) {
   return {results: interleave(groups).slice(0, limit), providers: {succeeded, failed}};
 }
 
-async function searchGifs(query, limit = 100) {
-  return queryAllProviders(PROVIDERS, [query], limit);
+// One screenful-plus of results per request instead of a single large
+// batch: 100 at once meant a long wait before anything appeared and a
+// hard ceiling on how much a user could ever browse. Paging lets the grid
+// fill quickly and keep going as they scroll.
+const PAGE_SIZE = 50;
+
+async function searchGifs(query, {page = 1} = {}) {
+  return queryAllProviders(PROVIDERS, [query], PAGE_SIZE, {page});
+}
+
+/**
+ * Adult GIF search. Separate entry point rather than another
+ * queryAllProviders(PROVIDERS, ...) caller, for two reasons: results must
+ * never be merged into the ordinary grid, and getConfiguredProviderNames
+ * gates on an API key that this provider doesn't have.
+ *
+ * Throws AdultContentDisabledError when the server opt-in is absent, so
+ * the route can answer 403 rather than an empty list - "turned off" and
+ * "nothing matched" need to be distinguishable by the client.
+ */
+async function searchAdultGifs(query, {page = 1} = {}) {
+  if (!adultGifsEnabled()) {
+    throw new AdultContentDisabledError();
+  }
+  return queryAllProviders(ADULT_PROVIDERS, [query], PAGE_SIZE, {requireApiKey: false, page});
 }
 
 // Shown in GifStickerPanel the moment it opens, before the user has typed
@@ -236,8 +399,8 @@ async function getTrendingGifs(limit = 24) {
   return queryAllProviders(TRENDING_PROVIDERS, [], limit);
 }
 
-async function searchStickers(query, limit = 100) {
-  return queryAllProviders(STICKER_PROVIDERS, [query], limit);
+async function searchStickers(query, {page = 1} = {}) {
+  return queryAllProviders(STICKER_PROVIDERS, [query], PAGE_SIZE, {page});
 }
 
 async function getTrendingStickers(limit = 24) {
@@ -245,10 +408,14 @@ async function getTrendingStickers(limit = 24) {
 }
 
 module.exports = {
+  PAGE_SIZE,
   searchGifs,
   getTrendingGifs,
   searchStickers,
   getTrendingStickers,
+  searchAdultGifs,
+  adultGifsEnabled,
   getConfiguredProviderNames,
   ProviderNotConfiguredError,
+  AdultContentDisabledError,
 };
