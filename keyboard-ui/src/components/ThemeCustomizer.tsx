@@ -39,6 +39,8 @@ export function ThemeCustomizer() {
     setIncognito,
     learnFromTyping,
     setLearnFromTyping,
+    adultGifsEnabled,
+    setAdultGifsEnabled,
   } = useKeyboardStore();
   const [showCreator, setShowCreator] = useState(false);
 
@@ -195,6 +197,22 @@ export function ThemeCustomizer() {
         )}
         <Text style={[styles.hint, {color: theme.keyText + '99'}]}>
           Password fields are always treated this way automatically, whether or not incognito is on.
+        </Text>
+
+        <Text style={[styles.sectionLabel, {color: theme.keyText + '99'}]}>CONTENT</Text>
+        <TouchableOpacity
+          style={[styles.row, styles.toggleRow, {backgroundColor: theme.keyBackground}]}
+          onPress={() => setAdultGifsEnabled(!adultGifsEnabled)}>
+          <Icon name="no-adult-content" size={18} color={adultGifsEnabled ? theme.accent : theme.keyText} />
+          <Text style={{color: theme.keyText, marginLeft: 8, flex: 1}}>Adult GIFs (18+)</Text>
+          <Text style={{color: adultGifsEnabled ? theme.accent : theme.keyText + '99', fontWeight: '600'}}>
+            {adultGifsEnabled ? 'ON' : 'OFF'}
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.hint, {color: theme.keyText + '99'}]}>
+          {adultGifsEnabled
+            ? 'An 18+ tab is shown in the GIF panel. Normal GIF and sticker searches are unaffected - adult results are never mixed into them.'
+            : 'Off. GIF search shows no adult content. Turning this on adds a separate 18+ tab to the GIF panel; it never changes the normal GIF or sticker results.'}
         </Text>
       </ScrollView>
 

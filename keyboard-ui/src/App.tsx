@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -15,12 +16,14 @@ import {EmojiPanel} from './components/EmojiPanel';
 import {GifStickerPanel} from './components/GifStickerPanel';
 import {SymbolsNumberPanel} from './components/SymbolsNumberPanel';
 import {LanguageSwitcher} from './components/LanguageSwitcher';
-import {TranslationPanel} from './components/TranslationPanel';
+import {TranslationHeader} from './components/TranslationHeader';
+import {LanguagePickerModal} from './components/LanguagePickerModal';
 import {ThemeCustomizer} from './components/ThemeCustomizer';
 import {ClipboardPanel} from './components/ClipboardPanel';
 import {LearnedWordsPanel} from './components/LearnedWordsPanel';
 import {NumericPanel} from './components/NumericPanel';
 import {InputConnection} from './native-bridge/InputConnection';
+import {useTranslationPanel} from './hooks/useTranslationPanel';
 
 const {ClipboardModule, KeyboardSizeModule} = NativeModules;
 
@@ -41,6 +44,18 @@ export default function App() {
     setLastSuggestion,
   } = useKeyboardStore();
   const lastReportedHeight = useRef(0);
+  // Called unconditionally (Rules of Hooks) - its internal effects
+  // self-gate on activePanel === 'translate', so this is a no-op the rest
+  // of the time. Holding it here (instead of inside a panel component)
+  // lets the header card (rendered above the toolbar) and the embedded
+  // keyboard (rendered by renderPanel, below the toolbar) share one copy
+  // of the same state instead of each needing their own.
+  const translation = useTranslationPanel();
+  // See KeyboardLayout.tsx's verticalScale comment - the toolbar's own
+  // fixed vertical padding contributes to the same landscape overflow, so
+  // it needs to shrink there too.
+  const {width: windowWidth, height: windowHeight} = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
 
   useEffect(() => {
     hydrate();
@@ -119,7 +134,18 @@ export default function App() {
       case 'gif':
         return <GifStickerPanel />;
       case 'translate':
-        return <TranslationPanel />;
+        // The pills + typed-text box render separately, above the
+        // toolbar (see the TranslationHeader render below) - this is
+        // just the redirected-keystrokes keyboard feeding sourceText,
+        // same slot every other panel's keyboard/content occupies.
+        return (
+          <KeyboardLayout
+            showSuggestions={false}
+            onCommitText={translation.appendToSource}
+            onDeleteBackward={translation.deleteFromSource}
+            onEnter={() => translation.appendToSource('\n')}
+          />
+        );
       case 'symbols':
         return <SymbolsNumberPanel />;
       case 'themeCustomizer':
@@ -147,20 +173,22 @@ export default function App() {
   // surface; a numeric field is single-purpose and Gboard doesn't show
   // its icon row there either.
   const isNumericPad = activePanel === 'numericPad';
-  // The translate panel has its own top bar (the language-pair pills,
-  // with its own way back to the keyboard) - the generic icon toolbar
-  // would just be redundant chrome sitting above it instead of the pills
-  // being the first thing shown, merged directly into the keyboard.
-  const hideGenericToolbar = isNumericPad || activePanel === 'translate';
 
   return (
     <View style={[styles.root, {backgroundColor: theme.panelBackground}]}>
       <View onLayout={handleContentLayout}>
-        {!hideGenericToolbar && (
-        <View style={styles.toolbar}>
+        {activePanel === 'translate' && <TranslationHeader state={translation} />}
+
+        {!isNumericPad && (
+        <View style={[styles.toolbar, isLandscape && styles.toolbarLandscape]}>
           {showSuggestionStrip ? (
             <>
-              <ToolbarIcon iconName="more-vert" onPress={() => setToolbarExpanded(true)} theme={theme} />
+              <ToolbarIcon
+                iconName="more-vert"
+                onPress={() => setToolbarExpanded(true)}
+                theme={theme}
+                compact={isLandscape}
+              />
               {suggestions.map(word => (
                 <TouchableOpacity key={word} onPress={() => applySuggestion(word)} style={styles.suggestionChip}>
                   <Text style={{color: theme.keyText}} numberOfLines={1}>
@@ -178,17 +206,38 @@ export default function App() {
                 // needs a way back - without this, a panel with no
                 // "done"/"ABC" button of its own (emoji, GIF) strands the
                 // user with no keyboard visible.
-                <ToolbarIcon iconName="keyboard" onPress={() => setActivePanel('keyboard')} theme={theme} />
+                <ToolbarIcon
+                  iconName="keyboard"
+                  onPress={() => setActivePanel('keyboard')}
+                  theme={theme}
+                  compact={isLandscape}
+                />
               )}
               <ToolbarIcon
                 label="GIF"
                 onPress={() => setActivePanel('gif')}
                 theme={theme}
                 textStyle={styles.gifLabel}
+                compact={isLandscape}
               />
-              <ToolbarIcon iconName="content-paste" onPress={openClipboardPanel} theme={theme} />
-              <ToolbarIcon iconName="translate" onPress={() => setActivePanel('translate')} theme={theme} />
-              <ToolbarIcon iconName="palette" onPress={() => setActivePanel('themeCustomizer')} theme={theme} />
+              <ToolbarIcon
+                iconName="content-paste"
+                onPress={openClipboardPanel}
+                theme={theme}
+                compact={isLandscape}
+              />
+              <ToolbarIcon
+                iconName="translate"
+                onPress={() => setActivePanel('translate')}
+                theme={theme}
+                compact={isLandscape}
+              />
+              <ToolbarIcon
+                iconName="palette"
+                onPress={() => setActivePanel('themeCustomizer')}
+                theme={theme}
+                compact={isLandscape}
+              />
             </>
           )}
         </View>
@@ -196,6 +245,8 @@ export default function App() {
 
         {renderPanel()}
       </View>
+
+      {activePanel === 'translate' && <LanguagePickerModal state={translation} />}
     </View>
   );
 }
@@ -206,19 +257,24 @@ function ToolbarIcon({
   onPress,
   theme,
   textStyle,
+  compact,
 }: {
   label?: string;
   iconName?: string;
   onPress: () => void;
   theme: {keyBackground: string; keyText: string};
   textStyle?: object;
+  // Landscape's much shorter screen otherwise clips the keyboard's bottom
+  // row off-screen (see KeyboardLayout.tsx's verticalScale) - this
+  // button's own fixed 36x36 size is part of that same overflow budget.
+  compact?: boolean;
 }) {
   return (
     <TouchableOpacity
-      style={[styles.toolbarIcon, {backgroundColor: theme.keyBackground}]}
+      style={[styles.toolbarIcon, compact && styles.toolbarIconCompact, {backgroundColor: theme.keyBackground}]}
       onPress={onPress}>
       {iconName ? (
-        <Icon name={iconName} size={20} color={theme.keyText} />
+        <Icon name={iconName} size={compact ? 16 : 20} color={theme.keyText} />
       ) : (
         <Text style={[{color: theme.keyText}, textStyle]}>{label}</Text>
       )}
@@ -238,12 +294,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 6,
   },
+  // Landscape's much shorter screen otherwise clips the keyboard's bottom
+  // row off-screen (see KeyboardLayout.tsx's verticalScale) - the
+  // toolbar's own fixed padding is part of that same overflow budget.
+  toolbarLandscape: {
+    paddingVertical: 2,
+  },
   toolbarIcon: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  toolbarIconCompact: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
   },
   gifLabel: {
     fontSize: 11,

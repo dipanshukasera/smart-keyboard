@@ -50,6 +50,7 @@ const CUSTOM_THEMES_KEY = 'custom_themes';
 const KEYBOARD_SIZE_SCALE_KEY = 'keyboard_size_scale';
 const TRANSLATE_SOURCE_LOCALE_KEY = 'translate_source_locale';
 const TRANSLATE_TARGET_LOCALE_KEY = 'translate_target_locale';
+const ADULT_GIFS_ENABLED_KEY = 'adult_gifs_enabled';
 
 interface KeyboardState {
   activeLocale: string;
@@ -83,6 +84,10 @@ interface KeyboardState {
   // incognito - a persistent opt-out rather than incognito's
   // session-scoped one.
   learnFromTyping: boolean;
+  // Opt-in for the 18+ tab in the GIF panel. Off by default, and even
+  // when on the backend still has to have ENABLE_ADULT_GIFS=true - the
+  // tab isn't rendered and the adult endpoint is never called otherwise.
+  adultGifsEnabled: boolean;
   oneHandedMode: OneHandedMode;
   // Deliberately never persisted (see hydrate) - Gboard requires
   // re-enabling incognito every session too, rather than it silently
@@ -123,6 +128,7 @@ interface KeyboardState {
   learnWord: (word: string) => void;
   removeLearnedWord: (word: string) => void;
   setLearnFromTyping: (value: boolean) => void;
+  setAdultGifsEnabled: (value: boolean) => void;
   setOneHandedMode: (mode: OneHandedMode) => void;
   setIncognito: (value: boolean) => void;
   setSensitiveField: (value: boolean) => void;
@@ -151,6 +157,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   isToolbarExpanded: false,
   learnedWords: [],
   learnFromTyping: true,
+  adultGifsEnabled: false,
   oneHandedMode: 'off',
   isIncognito: false,
   isSensitiveField: false,
@@ -284,6 +291,11 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(LEARN_FROM_TYPING_KEY, value);
   },
 
+  setAdultGifsEnabled: value => {
+    set({adultGifsEnabled: value});
+    ThemeStorage.saveJSON(ADULT_GIFS_ENABLED_KEY, value);
+  },
+
   setOneHandedMode: mode => {
     set({oneHandedMode: mode});
     ThemeStorage.saveJSON(ONE_HANDED_MODE_KEY, mode);
@@ -371,6 +383,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       keyboardSizeScale,
       translateSourceLocale,
       translateTargetLocale,
+      adultGifsEnabled,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -384,6 +397,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<number>(KEYBOARD_SIZE_SCALE_KEY, 1),
       ThemeStorage.loadJSON<string | null>(TRANSLATE_SOURCE_LOCALE_KEY, null),
       ThemeStorage.loadJSON<string | null>(TRANSLATE_TARGET_LOCALE_KEY, null),
+      ThemeStorage.loadJSON<boolean>(ADULT_GIFS_ENABLED_KEY, false),
     ]);
     set({
       activeLocale: locale,
@@ -398,6 +412,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       keyboardSizeScale,
       translateSourceLocale,
       translateTargetLocale,
+      adultGifsEnabled,
     });
   },
 }));

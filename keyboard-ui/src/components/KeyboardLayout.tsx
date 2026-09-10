@@ -1,5 +1,13 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {DeviceEventEmitter, PanResponder, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {
+  DeviceEventEmitter,
+  PanResponder,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection, ImeAction} from '../native-bridge/InputConnection';
@@ -143,14 +151,26 @@ export function KeyboardLayout({
   // do nothing until you let go.
   const [numberPreviewIndex, setNumberPreviewIndex] = useState<number | null>(null);
 
+  // A row's height is fixed in dp regardless of orientation, but a
+  // landscape screen is roughly half as tall as portrait - the same
+  // absolute keyboard height that fits comfortably in portrait overflows
+  // a landscape window and clips the bottom row (space/enter) off-screen
+  // entirely. Gboard (and every other Android keyboard) compensates by
+  // rendering visibly shorter rows in landscape - only the *vertical*
+  // dimensions shrink here, not font/icon size, so keys get flatter, not
+  // smaller-looking.
+  const {width: windowWidth, height: windowHeight} = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
+  const verticalScale = isLandscape ? 0.42 : 1;
+
   // Keyboard size setting (see ThemeCustomizer) - scales key padding/font/
   // icon size directly rather than needing any native change: the taller
   // or shorter result flows through App.tsx's existing onLayout ->
   // reportContentHeight -> native onMeasure pipeline automatically.
-  const keyPaddingVertical = 10 * keyboardSizeScale;
+  const keyPaddingVertical = 10 * keyboardSizeScale * verticalScale;
   const keyFontSize = 15 * keyboardSizeScale;
   const keyIconSize = 20 * keyboardSizeScale;
-  const rowMarginVertical = 2 * keyboardSizeScale;
+  const rowMarginVertical = 2 * keyboardSizeScale * verticalScale;
 
   useEffect(() => {
     // Only meaningful for the real, non-redirected instance - GifStickerPanel's
@@ -465,7 +485,12 @@ export function KeyboardLayout({
   const isOneHanded = showSuggestions && oneHandedMode !== 'off';
 
   const keyboardBody = (
-    <View style={[styles.container, {backgroundColor: theme.panelBackground}, isOneHanded && styles.oneHandedFlex]}>
+    <View
+      style={[
+        styles.container,
+        {backgroundColor: theme.panelBackground, paddingVertical: 4 * verticalScale},
+        isOneHanded && styles.oneHandedFlex,
+      ]}>
       {layout.rows.map((row, rowIndex) => (
         <View key={rowIndex} style={[styles.row, {marginVertical: rowMarginVertical}]}>
           {row.map((keyDef, keyIndex) => {
