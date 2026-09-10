@@ -234,6 +234,11 @@ export function GifStickerPanel() {
       // failed first page should empty the grid.
       if (page === 1) {
         setResults([]);
+        // The status area (and so the error) is hidden while the keys are
+        // up, so a failed search launched from typing mode would show
+        // nothing at all - the tap just looked ignored. Collapsing the
+        // keys is what makes the message visible.
+        setIsTyping(false);
       }
       setHasMore(false);
       setError(describeRequestFailure(err, typeLabel));

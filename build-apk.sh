@@ -10,6 +10,9 @@
 #   ./build-apk.sh                    # refresh backend + build APK + copy
 #   ./build-apk.sh --install          # ...+ ensure an emulator is running + adb install -r
 #   ./build-apk.sh --install --local  # ...+ point the app at the LOCAL backend
+#   ./build-apk.sh --host 192.168.1.20  # point it at this machine's LAN IP,
+#                                       # which is what a physical phone needs
+#                                       # (10.0.2.2 only works in an emulator)
 #
 # --local builds against http://10.0.2.2:4000 (the emulator's alias for this
 # machine) instead of the deployed backend. Worth using for any on-device
@@ -105,16 +108,31 @@ wait_for_emulator_ready() {
 
 DO_INSTALL=0
 USE_LOCAL_BACKEND=0
-for arg in "$@"; do
-  case "$arg" in
+BACKEND_HOST=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --install) DO_INSTALL=1 ;;
     --local) USE_LOCAL_BACKEND=1 ;;
+    --host)
+      shift
+      if [ -z "${1:-}" ]; then
+        echo "error: --host needs a value, e.g. --host 192.168.1.20" >&2
+        exit 1
+      fi
+      BACKEND_HOST="$1"
+      ;;
     *)
-      echo "error: unknown option '$arg' (expected --install and/or --local)" >&2
+      echo "error: unknown option '$1' (expected --install, --local, --host <ip|url>)" >&2
       exit 1
       ;;
   esac
+  shift
 done
+
+if [ -n "$BACKEND_HOST" ] && [ "$USE_LOCAL_BACKEND" = "1" ]; then
+  echo "error: --local and --host are mutually exclusive (--local is --host 10.0.2.2)." >&2
+  exit 1
+fi
 
 if [ "$DO_INSTALL" = "1" ]; then
   ensure_emulator_starting
@@ -162,6 +180,24 @@ if [ "$USE_LOCAL_BACKEND" = "1" ]; then
   trap 'mv -f "$API_TS.prebuild" "$API_TS" 2>/dev/null || true' EXIT
   sed -i '' 's/^export const API_BASE_URL = DEPLOYED_BACKEND;/export const API_BASE_URL = LOCAL_BACKEND;/' "$API_TS"
   echo "==> Building against LOCAL backend (http://10.0.2.2:4000)"
+elif [ -n "$BACKEND_HOST" ]; then
+  if [ ! -f "$API_TS" ]; then
+    echo "error: $API_TS not found - cannot switch the backend URL." >&2
+    exit 1
+  fi
+  # A bare host/IP is the common case (a phone on the same Wi-Fi needs this
+  # machine's LAN address, since 10.0.2.2 only resolves inside the
+  # emulator), so fill in the scheme and port; a full URL is passed through.
+  case "$BACKEND_HOST" in
+    http://*|https://*) BACKEND_URL="$BACKEND_HOST" ;;
+    *) BACKEND_URL="http://$BACKEND_HOST:4000" ;;
+  esac
+  cp "$API_TS" "$API_TS.prebuild"
+  trap 'mv -f "$API_TS.prebuild" "$API_TS" 2>/dev/null || true' EXIT
+  sed -i '' "s|^export const API_BASE_URL = .*;|export const API_BASE_URL = '$BACKEND_URL';|" "$API_TS"
+  echo "==> Building against $BACKEND_URL"
+  echo "    (a phone also needs to be on the same network as this machine,"
+  echo "     and macOS may prompt to allow incoming connections)"
 else
   echo "==> Building against the deployed backend"
 fi

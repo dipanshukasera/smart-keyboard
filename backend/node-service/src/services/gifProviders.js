@@ -240,7 +240,11 @@ class ProviderNotConfiguredError extends Error {
 // empty result set stays distinguishable from the feature being disabled.
 class AdultContentDisabledError extends Error {
   constructor() {
-    super('Adult GIF search is disabled on this server (ENABLE_ADULT_GIFS is not "true")');
+    // Message is shown verbatim in the keyboard (GifStickerPanel surfaces
+    // the backend's `error` string), so it's phrased for whoever is
+    // holding the phone - naming the env var told them nothing they could
+    // act on.
+    super('Adult GIFs aren’t enabled. Turn them on in keyboard settings to use this feature.');
     this.name = 'AdultContentDisabledError';
   }
 }
