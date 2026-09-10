@@ -6,7 +6,8 @@
     "start": "react-native start",
     "android": "react-native run-android",
     "lint": "eslint src --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@types/react-native-vector-icons": "^6.4.18",
@@ -14,6 +15,7 @@
     "react": "18.3.1",
     "react-native": "0.75.4",
     "react-native-vector-icons": "^10.3.0",
+    "react-native-video": "^6.19.2",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
@@ -23,6 +25,8 @@
     "@react-native/metro-config": "0.75.4",
     "@types/react": "^18.3.5",
     "eslint": "^8.57.0",
+    "patch-package": "^8.0.1",
+    "postinstall-postinstall": "^2.1.0",
     "typescript": "5.5.4"
   },
   "engines": {

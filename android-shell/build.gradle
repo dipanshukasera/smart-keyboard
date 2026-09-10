@@ -5,6 +5,13 @@ buildscript {
         compileSdkVersion = 34
         targetSdkVersion = 34
         kotlinVersion = "1.9.24"
+        // react-native-video reads this (safeExtGet('media3Version') in its
+        // android/build.gradle) - its default pulls androidx.media3 1.8.x,
+        // whose AAR metadata demands compileSdk 35, which AGP 8.5.0 doesn't
+        // support. 1.4.x is the newest line that still builds against 34, so
+        // pinning it here avoids dragging the whole project through an
+        // AGP/compileSdk upgrade just to add a video player.
+        media3Version = "1.4.1"
     }
     repositories {
         google()

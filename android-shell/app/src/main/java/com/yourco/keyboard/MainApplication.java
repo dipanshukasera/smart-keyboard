@@ -31,6 +31,18 @@ public class MainApplication extends Application implements ReactApplication {
         protected String getJSMainModuleName() {
             return "index";
         }
+
+        // An IME is a Service, not an Activity - onHostResume/onHostPause
+        // (see KeyboardReactView/ImeService) always pass null for the
+        // activity, which is normal here, not a bug. The default true
+        // makes ReactInstanceManager.onHostPause() assert
+        // mCurrentActivity != null and crash the moment the keyboard
+        // window is ever hidden after having been shown once - this is
+        // the documented override point for exactly that case.
+        @Override
+        public boolean getShouldRequireActivity() {
+            return false;
+        }
     };
 
     @Override

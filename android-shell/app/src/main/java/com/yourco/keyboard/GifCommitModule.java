@@ -71,7 +71,13 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                     promise.resolve(false);
                     return;
                 }
-                if (!acceptsGif(info)) {
+                // Derived from the URL rather than passed in from JS: the
+                // adult provider's results are mp4 (Redgifs serves no GIF
+                // - see mapRedgifsItem), everything else is an image, and
+                // the extension already tells us which without changing
+                // the bridge signature.
+                String mimeType = mimeTypeFor(remoteUrl);
+                if (!accepts(info, mimeType)) {
                     promise.resolve(false);
                     return;
                 }
@@ -92,7 +98,9 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                 // whichever one they declared in EditorInfo.contentMimeTypes.
                 InputContentInfoCompat contentInfo = new InputContentInfoCompat(
                         contentUri,
-                        new ClipDescription("GIF", new String[]{"image/gif", "image/*"}),
+                        new ClipDescription(
+                                mimeType.startsWith("video/") ? "Video" : "GIF",
+                                new String[]{mimeType, wildcardFor(mimeType)}),
                         null);
 
                 boolean sent = InputConnectionCompat.commitContent(
@@ -111,17 +119,77 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
 
     private boolean currentFieldAcceptsGif() {
         EditorInfo info = InputConnectionHolder.editorInfo();
-        return info != null && acceptsGif(info);
+        return info != null && accepts(info, "image/gif");
     }
 
-    private boolean acceptsGif(EditorInfo info) {
+    /**
+     * Whether the focused field declared it accepts `mimeType`, counting
+     * its family wildcard - a field advertising "image/*" takes a GIF, and
+     * one advertising "video/*" takes an mp4.
+     *
+     * Video acceptance is much rarer than image acceptance, which is why
+     * GifStickerPanel tries the video first and retries with the still
+     * frame if this returns false, rather than assuming either works.
+     */
+    private boolean accepts(EditorInfo info, String mimeType) {
+        String wildcard = wildcardFor(mimeType);
         String[] mimeTypes = EditorInfoCompat.getContentMimeTypes(info);
         for (String type : mimeTypes) {
-            if ("image/gif".equalsIgnoreCase(type) || "image/*".equalsIgnoreCase(type)) {
+            if (mimeType.equalsIgnoreCase(type) || wildcard.equalsIgnoreCase(type)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private String mimeTypeFor(String url) {
+        String path = url.toLowerCase();
+        // Query strings would otherwise defeat the endsWith checks.
+        int queryStart = path.indexOf('?');
+        if (queryStart != -1) {
+            path = path.substring(0, queryStart);
+        }
+        if (path.endsWith(".mp4") || path.endsWith(".m4v")) {
+            return "video/mp4";
+        }
+        if (path.endsWith(".webm")) {
+            return "video/webm";
+        }
+        if (path.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (path.endsWith(".png")) {
+            return "image/png";
+        }
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        return "image/gif";
+    }
+
+    private String wildcardFor(String mimeType) {
+        return mimeType.startsWith("video/") ? "video/*" : "image/*";
+    }
+
+    // The receiving app generally infers the format from the file
+    // extension of the content URI, so a downloaded mp4 saved as ".gif"
+    // arrives as a corrupt GIF rather than a video.
+    private String cacheExtensionFor(String url) {
+        String mimeType = mimeTypeFor(url);
+        switch (mimeType) {
+            case "video/mp4":
+                return ".mp4";
+            case "video/webm":
+                return ".webm";
+            case "image/webp":
+                return ".webp";
+            case "image/png":
+                return ".png";
+            case "image/jpeg":
+                return ".jpg";
+            default:
+                return ".gif";
+        }
     }
 
     private File downloadToCache(String remoteUrl) throws Exception {
@@ -129,7 +197,7 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
         if (!cacheDir.exists()) {
             cacheDir.mkdirs();
         }
-        File outFile = new File(cacheDir, sha1(remoteUrl) + ".gif");
+        File outFile = new File(cacheDir, sha1(remoteUrl) + cacheExtensionFor(remoteUrl));
         if (outFile.exists()) {
             return outFile;
         }

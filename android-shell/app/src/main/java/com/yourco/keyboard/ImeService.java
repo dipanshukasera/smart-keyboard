@@ -2,6 +2,8 @@ package com.yourco.keyboard;
 
 import android.inputmethodservice.InputMethodService;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
@@ -24,7 +26,19 @@ public class ImeService extends InputMethodService {
         if (keyboardReactView == null) {
             keyboardReactView = new KeyboardReactView(this);
         }
-        return keyboardReactView.getView();
+        View view = keyboardReactView.getView();
+        // onCreateInputView() can fire more than once across the IME's
+        // lifetime (e.g. on a configuration change), but this always
+        // returns the same cached view rather than building a new one -
+        // if it's still attached to whatever window last held it, the
+        // framework's setInputView() throws "already has a parent" trying
+        // to attach it to the new one. Detach it from its old parent
+        // first so the same instance can be reattached cleanly.
+        ViewParent parent = view.getParent();
+        if (parent instanceof ViewGroup) {
+            ((ViewGroup) parent).removeView(view);
+        }
+        return view;
     }
 
     @Override

@@ -4,6 +4,16 @@ apply plugin: "com.facebook.react"
 react {
     root = file("../../keyboard-ui")
     reactNativeDir = file("../../keyboard-ui/node_modules/react-native")
+    // Adds the `implementation project(...)` dependency for every native
+    // module that settings.gradle's autolinkLibrariesFromCommand found.
+    // Without it, autolinking still *generates* PackageList.java with the
+    // imports and `new SomePackage()` entries, but the libraries are never
+    // put on the compile classpath - so either the build fails with
+    // "package does not exist", or (if the generated list happens to be
+    // stale/empty) it compiles and the native module is silently absent,
+    // which shows up at runtime as "Cannot read property
+    // 'bubblingEventTypes' of null" for that library's components.
+    autolinkLibrariesWithApp()
 }
 
 android {
@@ -43,6 +53,15 @@ dependencies {
     implementation "com.facebook.react:react-android"
     implementation "com.facebook.react:hermes-android"
     implementation "androidx.appcompat:appcompat:1.7.0"
+    // React Native bundles Fresco but not its animation decoders, so
+    // <Image> renders only the first frame of a GIF/animated WebP - which
+    // made the whole GIF panel look like a grid of stills. Version must
+    // match the Fresco that react-android pulls in (gradle/libs.versions.toml
+    // in node_modules/react-native pins 3.2.0); a mismatch gives duplicate
+    // classes at merge time.
+    implementation "com.facebook.fresco:animated-gif:3.2.0"
+    implementation "com.facebook.fresco:animated-webp:3.2.0"
+    implementation "com.facebook.fresco:webpsupport:3.2.0"
     // InputConnectionCompat / InputContentInfoCompat (commitContent) and FileProvider.
     implementation "androidx.core:core:1.13.1"
 }

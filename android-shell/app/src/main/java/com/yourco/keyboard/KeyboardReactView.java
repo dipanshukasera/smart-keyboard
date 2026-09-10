@@ -36,11 +36,16 @@ public class KeyboardReactView {
     private final ReactInstanceManager reactInstanceManager;
 
     KeyboardReactView(Context context) {
-        DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-        final float density = metrics.density;
-        final int fallbackHeightPx = Math.round(metrics.heightPixels * FALLBACK_HEIGHT_FRACTION);
-        final int minHeightPx = Math.round(metrics.heightPixels * MIN_HEIGHT_FRACTION);
-        final int maxHeightPx = Math.round(metrics.heightPixels * MAX_HEIGHT_FRACTION);
+        // Re-read on every onMeasure() below rather than captured once
+        // here: this object is created lazily the first time the keyboard
+        // is shown (see ImeService.onCreateInputView) and reused for the
+        // service's entire lifetime, including across rotation. Metrics
+        // captured only at construction time would stay pinned to
+        // whatever orientation was active the first time the keyboard
+        // ever appeared, clamping against the wrong (e.g. portrait)
+        // screen height forever after even once actually in landscape.
+        DisplayMetrics initialMetrics = context.getResources().getDisplayMetrics();
+        final int fallbackHeightPx = Math.round(initialMetrics.heightPixels * FALLBACK_HEIGHT_FRACTION);
 
         // Plain setLayoutParams() isn't enough: whatever container
         // InputMethodService attaches this view to re-measures it with its
@@ -50,13 +55,19 @@ public class KeyboardReactView {
         reactRootView = new ReactRootView(context) {
             @Override
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                DisplayMetrics metrics = getResources().getDisplayMetrics();
+                float density = metrics.density;
+                int minHeightPx = Math.round(metrics.heightPixels * MIN_HEIGHT_FRACTION);
+                int maxHeightPx = Math.round(metrics.heightPixels * MAX_HEIGHT_FRACTION);
+
                 float reportedDp = KeyboardHeightHolder.getContentHeightDp();
                 int targetHeightPx;
                 if (reportedDp > 0) {
                     int reportedPx = Math.round(reportedDp * density);
                     targetHeightPx = Math.max(minHeightPx, Math.min(maxHeightPx, reportedPx));
                 } else {
-                    targetHeightPx = fallbackHeightPx;
+                    int fallback = Math.round(metrics.heightPixels * FALLBACK_HEIGHT_FRACTION);
+                    targetHeightPx = fallback;
                 }
                 int exactHeightSpec = View.MeasureSpec.makeMeasureSpec(targetHeightPx, View.MeasureSpec.EXACTLY);
                 super.onMeasure(widthMeasureSpec, exactHeightSpec);
