@@ -10,22 +10,33 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {useKeyboardStore} from './store';
+import {useKeyboardStore, ToolId, DIM_LEVELS} from './store';
 import {KeyboardLayout} from './components/KeyboardLayout';
 import {EmojiPanel} from './components/EmojiPanel';
 import {GifStickerPanel} from './components/GifStickerPanel';
 import {SymbolsNumberPanel} from './components/SymbolsNumberPanel';
 import {LanguageSwitcher} from './components/LanguageSwitcher';
-import {TranslationHeader} from './components/TranslationHeader';
+import {TranslatePanel} from './components/TranslatePanel';
 import {LanguagePickerModal} from './components/LanguagePickerModal';
 import {ThemeCustomizer} from './components/ThemeCustomizer';
 import {ClipboardPanel} from './components/ClipboardPanel';
 import {LearnedWordsPanel} from './components/LearnedWordsPanel';
 import {NumericPanel} from './components/NumericPanel';
+import {AllToolsSheet} from './components/AllToolsSheet';
+import {FontPanel} from './components/FontPanel';
+import {SettingsPanel} from './components/SettingsPanel';
+import {ToolbarOrderPanel} from './components/ToolbarOrderPanel';
 import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
 
 const {ClipboardModule, KeyboardSizeModule} = NativeModules;
+
+// Panels that render their own way back (PanelSheet's X, or - for
+// ThemeCustomizer - its own "Done" link) don't need the toolbar row on
+// top of that; every other non-keyboard panel (gif/emoji/clipboard/
+// learnedWords/symbols) predates that pattern and still relies on the
+// toolbar's single "back to keyboard" icon, same as before this redesign.
+const SELF_CLOSING_PANELS = new Set(['allTools', 'font', 'settings', 'toolbarOrder', 'translate', 'themeCustomizer']);
 
 export default function App() {
   const {
@@ -42,6 +53,9 @@ export default function App() {
     setSensitiveField,
     setNumericField,
     setLastSuggestion,
+    toolbarOrder,
+    keyboardDimLevel,
+    cycleKeyboardDim,
   } = useKeyboardStore();
   const lastReportedHeight = useRef(0);
   // Called unconditionally (Rules of Hooks) - its internal effects
@@ -134,17 +148,19 @@ export default function App() {
       case 'gif':
         return <GifStickerPanel />;
       case 'translate':
-        // The pills + typed-text box render separately, above the
-        // toolbar (see the TranslationHeader render below) - this is
-        // just the redirected-keystrokes keyboard feeding sourceText,
-        // same slot every other panel's keyboard/content occupies.
         return (
-          <KeyboardLayout
-            showSuggestions={false}
-            onCommitText={translation.appendToSource}
-            onDeleteBackward={translation.deleteFromSource}
-            onEnter={() => translation.appendToSource('\n')}
-          />
+          <>
+            <TranslatePanel state={translation} />
+            {/* The pills + typed/translation sheet render above (this is
+                just the redirected-keystrokes keyboard feeding sourceText,
+                same slot every other panel's keyboard/content occupies). */}
+            <KeyboardLayout
+              showSuggestions={false}
+              onCommitText={translation.appendToSource}
+              onDeleteBackward={translation.deleteFromSource}
+              onEnter={() => translation.appendToSource('\n')}
+            />
+          </>
         );
       case 'symbols':
         return <SymbolsNumberPanel />;
@@ -156,6 +172,14 @@ export default function App() {
         return <LearnedWordsPanel />;
       case 'numericPad':
         return <NumericPanel />;
+      case 'allTools':
+        return <AllToolsSheet onOpenClipboard={openClipboardPanel} />;
+      case 'font':
+        return <FontPanel />;
+      case 'settings':
+        return <SettingsPanel />;
+      case 'toolbarOrder':
+        return <ToolbarOrderPanel />;
       case 'keyboard':
       default:
         return <KeyboardLayout />;
@@ -173,13 +197,12 @@ export default function App() {
   // surface; a numeric field is single-purpose and Gboard doesn't show
   // its icon row there either.
   const isNumericPad = activePanel === 'numericPad';
+  const hidesToolbarRow = SELF_CLOSING_PANELS.has(activePanel);
 
   return (
     <View style={[styles.root, {backgroundColor: theme.panelBackground}]}>
       <View onLayout={handleContentLayout}>
-        {activePanel === 'translate' && <TranslationHeader state={translation} />}
-
-        {!isNumericPad && (
+        {!isNumericPad && !hidesToolbarRow && (
         <View style={[styles.toolbar, isLandscape && styles.toolbarLandscape]}>
           {showSuggestionStrip ? (
             <>
@@ -197,56 +220,131 @@ export default function App() {
                 </TouchableOpacity>
               ))}
             </>
-          ) : (
+          ) : activePanel === 'keyboard' ? (
             <>
-              {activePanel === 'keyboard' ? (
-                <LanguageSwitcher />
-              ) : (
-                // Every non-keyboard panel (emoji, GIF, symbols, theme)
-                // needs a way back - without this, a panel with no
-                // "done"/"ABC" button of its own (emoji, GIF) strands the
-                // user with no keyboard visible.
-                <ToolbarIcon
-                  iconName="keyboard"
-                  onPress={() => setActivePanel('keyboard')}
+              <ToolbarIcon
+                iconName="more-horiz"
+                onPress={() => setActivePanel('allTools')}
+                theme={theme}
+                compact={isLandscape}
+              />
+              <View style={[styles.divider, {backgroundColor: theme.keyText + '33'}]} />
+              {toolbarOrder.map(id => (
+                <ToolRow
+                  key={id}
+                  id={id}
                   theme={theme}
                   compact={isLandscape}
+                  dimLevel={keyboardDimLevel}
+                  onPress={() => {
+                    switch (id) {
+                      case 'gif':
+                        setActivePanel('gif');
+                        return;
+                      case 'translate':
+                        setActivePanel('translate');
+                        return;
+                      case 'clipboard':
+                        openClipboardPanel();
+                        return;
+                      case 'themes':
+                        setActivePanel('themeCustomizer');
+                        return;
+                      case 'brightness':
+                        cycleKeyboardDim();
+                        return;
+                      case 'emoji':
+                        setActivePanel('emoji');
+                        return;
+                    }
+                  }}
                 />
-              )}
-              <ToolbarIcon
-                label="GIF"
-                onPress={() => setActivePanel('gif')}
-                theme={theme}
-                textStyle={styles.gifLabel}
-                compact={isLandscape}
-              />
-              <ToolbarIcon
-                iconName="content-paste"
-                onPress={openClipboardPanel}
-                theme={theme}
-                compact={isLandscape}
-              />
-              <ToolbarIcon
-                iconName="translate"
-                onPress={() => setActivePanel('translate')}
-                theme={theme}
-                compact={isLandscape}
-              />
-              <ToolbarIcon
-                iconName="palette"
-                onPress={() => setActivePanel('themeCustomizer')}
-                theme={theme}
-                compact={isLandscape}
-              />
+              ))}
+              <LanguageSwitcher />
             </>
+          ) : (
+            // gif/emoji/clipboard/learnedWords/symbols predate the newer
+            // self-closing sheets and have no close button of their own -
+            // this is their only way back.
+            <ToolbarIcon
+              iconName="keyboard"
+              onPress={() => setActivePanel('keyboard')}
+              theme={theme}
+              compact={isLandscape}
+            />
           )}
         </View>
         )}
 
         {renderPanel()}
+
+        {keyboardDimLevel > 0 && (
+          <View
+            pointerEvents="none"
+            style={[styles.dimOverlay, {opacity: 1 - DIM_LEVELS[keyboardDimLevel]}]}
+          />
+        )}
       </View>
 
       {activePanel === 'translate' && <LanguagePickerModal state={translation} />}
+    </View>
+  );
+}
+
+// One toolbar-row entry for a given tool id - "GIF" is a text label
+// (mint/accent-colored, matching the reference) rather than an icon like
+// every other tool.
+function ToolRow({
+  id,
+  theme,
+  compact,
+  onPress,
+  dimLevel,
+}: {
+  id: ToolId;
+  theme: {keyBackground: string; keyText: string; accent: string};
+  compact?: boolean;
+  onPress: () => void;
+  dimLevel: number;
+}) {
+  if (id === 'gif') {
+    return (
+      <ToolbarIcon
+        label="GIF"
+        onPress={onPress}
+        theme={theme}
+        textStyle={[styles.gifLabel, {color: theme.accent}]}
+        compact={compact}
+      />
+    );
+  }
+  const iconName: Record<Exclude<ToolId, 'gif'>, string> = {
+    translate: 'translate',
+    clipboard: 'content-paste',
+    themes: 'contrast',
+    brightness: 'wb-sunny',
+    emoji: 'mood',
+  };
+  // Brightness has no separate "on" screen to reflect its state - the
+  // number of dots below the icon says which of the three dim steps is
+  // active, so tapping repeatedly reads as a real cycle instead of a
+  // button that silently does something each time.
+  return (
+    <View style={styles.toolWithIndicator}>
+      <ToolbarIcon iconName={iconName[id as Exclude<ToolId, 'gif'>]} onPress={onPress} theme={theme} compact={compact} />
+      {id === 'brightness' && (
+        <View style={styles.dimDots}>
+          {DIM_LEVELS.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dimDot,
+                {backgroundColor: i === dimLevel ? theme.accent : theme.keyText + '44'},
+              ]}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -263,7 +361,7 @@ function ToolbarIcon({
   iconName?: string;
   onPress: () => void;
   theme: {keyBackground: string; keyText: string};
-  textStyle?: object;
+  textStyle?: object | object[];
   // Landscape's much shorter screen otherwise clips the keyboard's bottom
   // row off-screen (see KeyboardLayout.tsx's verticalScale) - this
   // button's own fixed 36x36 size is part of that same overflow budget.
@@ -312,14 +410,43 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
   },
+  divider: {
+    width: 1,
+    height: 22,
+    marginHorizontal: 2,
+  },
   gifLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  toolWithIndicator: {
+    alignItems: 'center',
+  },
+  dimDots: {
+    flexDirection: 'row',
+    marginTop: 2,
+    gap: 3,
+  },
+  dimDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   suggestionChip: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+  },
+  // A flat black scrim over the entire keyboard - real dimming, not a
+  // decorative icon state. pointerEvents="none" so it never blocks taps
+  // on the keys/toolbar underneath.
+  dimOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000000',
   },
 });

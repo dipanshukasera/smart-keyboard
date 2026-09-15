@@ -5,15 +5,22 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Vibration,
   useWindowDimensions,
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection, ImeAction} from '../native-bridge/InputConnection';
+import {KeySound} from '../native-bridge/SoundModule';
 import type {KeyDef, LayoutDef} from '../layouts/types';
 import {buildStyledLayout} from '../layouts/layoutStyles';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
+
+// A full row of digit keys shown above the top letter row when the
+// "Number row" setting is on - distinct from NUMBER_HINTS below (the
+// existing per-key long-press hint), which stays available regardless.
+const NUMBER_ROW_DIGITS = '1234567890'.split('');
 
 import enUS from '../layouts/en-US.json';
 import hiIN from '../layouts/hi-IN.json';
@@ -126,6 +133,10 @@ export function KeyboardLayout({
     lastSuggestion,
     setLastSuggestion,
     keyboardSizeScale,
+    numberRowEnabled,
+    hapticFeedbackEnabled,
+    keySoundEnabled,
+    keyFontFamily,
   } = useKeyboardStore();
   const lastSpaceTimeRef = useRef(0);
   // Auto-capitalization, mid-sentence case: set by commitChar whenever the
@@ -282,7 +293,17 @@ export function KeyboardLayout({
     }
   };
 
+  // Shared by every real key-press path (a plain tap, a held-delete repeat
+  // tick, and the number-hint long-press) rather than baked into just one
+  // of them, so turning either setting on actually covers typing in
+  // general, not just a slice of it.
+  const fireKeyFeedback = () => {
+    if (hapticFeedbackEnabled) Vibration.vibrate(8);
+    if (keySoundEnabled) KeySound.playKeyClick();
+  };
+
   const handleKeyPress = (keyDef: KeyDef) => {
+    fireKeyFeedback();
     switch (keyDef.action) {
       case 'shift':
         toggleShift();
@@ -383,6 +404,7 @@ export function KeyboardLayout({
 
   const handleDeleteRepeatTick = () => {
     if (deleteSuppressRepeatRef.current) return;
+    fireKeyFeedback();
     deleteOneCharacter();
   };
 
@@ -423,6 +445,7 @@ export function KeyboardLayout({
   const handleNumberHintPressStart = (keyId: string) => setPressedKeyId(keyId);
 
   const handleNumberHintLongPress = (keyIndex: number) => {
+    fireKeyFeedback();
     setNumberPreviewIndex(keyIndex);
     commitText(NUMBER_HINTS[keyIndex]);
     trackWord('');
@@ -484,6 +507,13 @@ export function KeyboardLayout({
   // one-handed - a search-query mini keyboard has no need for it.
   const isOneHanded = showSuggestions && oneHandedMode !== 'off';
 
+  // Same "real keyboard only" gating as one-handed mode above - a search
+  // mini keyboard (GifStickerPanel) has no use for a persistent digit row
+  // either. Deliberately a separate, plain row rather than reusing the
+  // per-key long-press hint machinery (NUMBER_HINTS/showNumberHint) below:
+  // that one stays exactly as it was, this is an addition on top of it.
+  const showNumberRow = showSuggestions && numberRowEnabled;
+
   const keyboardBody = (
     <View
       style={[
@@ -491,6 +521,31 @@ export function KeyboardLayout({
         {backgroundColor: theme.panelBackground, paddingVertical: 4 * verticalScale},
         isOneHanded && styles.oneHandedFlex,
       ]}>
+      {showNumberRow && (
+        <View style={[styles.row, {marginVertical: rowMarginVertical}]}>
+          {NUMBER_ROW_DIGITS.map((digit, index) => (
+            <TouchableOpacity
+              key={digit}
+              style={[
+                styles.key,
+                {
+                  flex: 1,
+                  backgroundColor: pressedKeyId === `numrow-${index}` ? theme.keyPressedBackground : theme.keyBackground,
+                  paddingVertical: keyPaddingVertical,
+                },
+              ]}
+              onPressIn={() => {
+                setPressedKeyId(`numrow-${index}`);
+                handleKeyPress({key: digit});
+              }}
+              onPressOut={() => setPressedKeyId(null)}>
+              <Text style={{color: theme.keyText, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
+                {digit}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {layout.rows.map((row, rowIndex) => (
         <View key={rowIndex} style={[styles.row, {marginVertical: rowMarginVertical}]}>
           {row.map((keyDef, keyIndex) => {
@@ -623,7 +678,7 @@ export function KeyboardLayout({
                   {iconName ? (
                     <Icon name={iconName} size={keyIconSize} color={textColor} />
                   ) : (
-                    <Text style={{color: textColor, fontSize: keyFontSize}}>
+                    <Text style={{color: textColor, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
                       {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                     </Text>
                   )}
@@ -653,7 +708,7 @@ export function KeyboardLayout({
                 {iconName ? (
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (
-                  <Text style={{color: textColor, fontSize: keyFontSize}}>
+                  <Text style={{color: textColor, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
                     {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                   </Text>
                 )}
@@ -705,7 +760,8 @@ const styles = StyleSheet.create({
   },
   key: {
     marginHorizontal: 2,
-    borderRadius: 6,
+    // 13px per the "Keyboard Toolbar Explorations" design board (was 6).
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',

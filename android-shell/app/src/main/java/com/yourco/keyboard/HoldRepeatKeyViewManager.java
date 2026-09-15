@@ -50,6 +50,15 @@ public class HoldRepeatKeyViewManager extends ViewGroupManager<HoldRepeatKeyView
         view.setDragThresholdDp(dp);
     }
 
+    // Not handled for free by ViewGroupManager (unlike backgroundColor) -
+    // see the comment on HoldRepeatKeyView's cornerRadiusPx field for why.
+    // This view only ever gets one flat radius from JS (styles.key), never
+    // per-corner values, so a single "borderRadius" prop is sufficient.
+    @ReactProp(name = "borderRadius", defaultFloat = 0f)
+    public void setBorderRadius(HoldRepeatKeyView view, float radius) {
+        view.setKeyCornerRadiusDp(radius);
+    }
+
     @Override
     public Map<String, Object> getExportedCustomDirectEventTypeConstants() {
         return MapBuilder.<String, Object>builder()

@@ -59,12 +59,22 @@ function describeRequestFailure(err: any, typeLabel: string): string {
 }
 
 export function GifStickerPanel() {
-  const {theme, recentGifs, addRecentGif, adultGifsEnabled} = useKeyboardStore();
+  const {theme, recentGifs, addRecentGif, adultGifsEnabled, pendingGifTab, setPendingGifTab} = useKeyboardStore();
   // Gboard's GIF panel has a GIFs/Stickers toggle at the top rather than
   // two separate toolbar icons - same search box and grid, just pointed at
   // a different backend endpoint (Klipy has a genuinely separate sticker
   // library, not GIFs re-tagged - see gifProviders.js).
-  const [contentType, setContentType] = useState<ContentType>('gif');
+  //
+  // pendingGifTab is a one-shot request set by AllToolsSheet's "Stickers"
+  // card (see store) so that tool can land straight on the sticker tab
+  // instead of always opening to GIFs and making the user switch - cleared
+  // immediately so it doesn't stick around and hijack a later plain "GIFs"
+  // open.
+  const [contentType, setContentType] = useState<ContentType>(pendingGifTab ?? 'gif');
+  useEffect(() => {
+    if (pendingGifTab) setPendingGifTab(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // A keyboard's own window can't summon another system keyboard on top of
   // itself, so there's no real focusable TextInput here - tapping the
   // search box swaps this panel into "typing" mode, reusing the same

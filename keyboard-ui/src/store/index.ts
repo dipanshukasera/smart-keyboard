@@ -14,8 +14,23 @@ export type PanelType =
   | 'clipboard'
   | 'learnedWords'
   | 'numericPad'
-  | 'translate';
+  | 'translate'
+  | 'allTools'
+  | 'font'
+  | 'settings'
+  | 'toolbarOrder';
 export type OneHandedMode = 'off' | 'left' | 'right';
+
+// Every tool the "All tools" grid and the toolbar's own row can show - a
+// single id space so both share one persisted order (see toolbarOrder)
+// instead of drifting into two different lists of "the same" tools.
+export type ToolId = 'gif' | 'translate' | 'clipboard' | 'themes' | 'brightness' | 'emoji';
+export const ALL_TOOL_IDS: ToolId[] = ['gif', 'translate', 'clipboard', 'themes', 'brightness', 'emoji'];
+// Three flat steps rather than a slider (no slider component is installed,
+// and adding one for a single control isn't worth a new native dependency)
+// - tapping the brightness icon cycles through these, dimming the keyboard
+// itself via a semi-transparent overlay (see App.tsx).
+export const DIM_LEVELS = [1, 0.85, 0.7] as const;
 
 export interface ClipboardEntry {
   id: string;
@@ -51,6 +66,17 @@ const KEYBOARD_SIZE_SCALE_KEY = 'keyboard_size_scale';
 const TRANSLATE_SOURCE_LOCALE_KEY = 'translate_source_locale';
 const TRANSLATE_TARGET_LOCALE_KEY = 'translate_target_locale';
 const ADULT_GIFS_ENABLED_KEY = 'adult_gifs_enabled';
+const NUMBER_ROW_ENABLED_KEY = 'number_row_enabled';
+const HAPTIC_FEEDBACK_ENABLED_KEY = 'haptic_feedback_enabled';
+const KEY_SOUND_ENABLED_KEY = 'key_sound_enabled';
+// Persisted and shown as a real toggle (see SettingsPanel), but there is no
+// swipe-to-type gesture recognizer in this app yet - turning it on changes
+// nothing today. Flagged as such in the UI rather than silently doing
+// nothing with no explanation.
+const SWIPE_TRAIL_ENABLED_KEY = 'swipe_trail_enabled';
+const KEY_FONT_FAMILY_KEY = 'key_font_family';
+const TOOLBAR_ORDER_KEY = 'toolbar_order';
+const KEYBOARD_DIM_LEVEL_KEY = 'keyboard_dim_level';
 
 interface KeyboardState {
   activeLocale: string;
@@ -111,6 +137,36 @@ interface KeyboardState {
   // backspace press to undo that one substitution (see KeyboardLayout).
   // Anything else the user does in between should clear it first.
   lastSuggestion: LastSuggestion | null;
+  // A persistent full row of digit keys above the top letter row -
+  // distinct from the existing per-key long-press number hint (see
+  // KeyboardLayout's NUMBER_HINTS), which stays available either way.
+  numberRowEnabled: boolean;
+  // Real: a short Vibration.vibrate() on every key press when on.
+  hapticFeedbackEnabled: boolean;
+  // Real: plays Android's built-in keypress click sound (see
+  // native-bridge/SoundModule) - no bundled sound files or new audio
+  // library, just the system's own click.
+  keySoundEnabled: boolean;
+  // Not yet functional - see SWIPE_TRAIL_ENABLED_KEY above. Kept in state
+  // and shown in Settings for parity, with its own "not yet available"
+  // note rather than a fake animation with no gesture recognizer behind it.
+  swipeTypingTrailEnabled: boolean;
+  // One of Android's built-in system type faces (see FontPanel) - null
+  // means whatever RN's default is. Deliberately not a bundled custom
+  // font: no font files or a way to fetch them were available here.
+  keyFontFamily: string | null;
+  // Which tools appear in the toolbar, and in what order - "more" (the
+  // All-tools grid) is always first and isn't part of this list.
+  toolbarOrder: ToolId[];
+  // Index into DIM_LEVELS - cycled by tapping the toolbar's brightness
+  // icon, applied as a semi-transparent overlay over the whole keyboard
+  // (see App.tsx).
+  keyboardDimLevel: number;
+  // One-shot, never persisted: set by AllToolsSheet's "Stickers" card right
+  // before navigating to the 'gif' panel so it can open straight to that
+  // tab, then cleared by GifStickerPanel on mount so it doesn't affect a
+  // later plain "GIFs" open.
+  pendingGifTab: 'gif' | 'sticker' | null;
 
   setActiveLocale: (locale: string) => void;
   setActivePanel: (panel: PanelType) => void;
@@ -139,6 +195,14 @@ interface KeyboardState {
   addRecentGif: (entry: CachedGifEntry) => void;
   clearRecentGifs: () => void;
   setLastSuggestion: (value: LastSuggestion | null) => void;
+  setNumberRowEnabled: (value: boolean) => void;
+  setHapticFeedbackEnabled: (value: boolean) => void;
+  setKeySoundEnabled: (value: boolean) => void;
+  setSwipeTypingTrailEnabled: (value: boolean) => void;
+  setKeyFontFamily: (value: string | null) => void;
+  setToolbarOrder: (order: ToolId[]) => void;
+  cycleKeyboardDim: () => void;
+  setPendingGifTab: (tab: 'gif' | 'sticker' | null) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -167,6 +231,14 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   clipboardHistory: [],
   recentGifs: [],
   lastSuggestion: null,
+  numberRowEnabled: false,
+  hapticFeedbackEnabled: true,
+  keySoundEnabled: false,
+  swipeTypingTrailEnabled: true,
+  keyFontFamily: null,
+  toolbarOrder: ALL_TOOL_IDS,
+  keyboardDimLevel: 0,
+  pendingGifTab: null,
 
   setActiveLocale: locale => {
     set({activeLocale: locale});
@@ -369,6 +441,44 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
 
   setLastSuggestion: value => set({lastSuggestion: value}),
 
+  setNumberRowEnabled: value => {
+    set({numberRowEnabled: value});
+    ThemeStorage.saveJSON(NUMBER_ROW_ENABLED_KEY, value);
+  },
+
+  setHapticFeedbackEnabled: value => {
+    set({hapticFeedbackEnabled: value});
+    ThemeStorage.saveJSON(HAPTIC_FEEDBACK_ENABLED_KEY, value);
+  },
+
+  setKeySoundEnabled: value => {
+    set({keySoundEnabled: value});
+    ThemeStorage.saveJSON(KEY_SOUND_ENABLED_KEY, value);
+  },
+
+  setSwipeTypingTrailEnabled: value => {
+    set({swipeTypingTrailEnabled: value});
+    ThemeStorage.saveJSON(SWIPE_TRAIL_ENABLED_KEY, value);
+  },
+
+  setKeyFontFamily: value => {
+    set({keyFontFamily: value});
+    ThemeStorage.saveJSON(KEY_FONT_FAMILY_KEY, value);
+  },
+
+  setToolbarOrder: order => {
+    set({toolbarOrder: order});
+    ThemeStorage.saveJSON(TOOLBAR_ORDER_KEY, order);
+  },
+
+  cycleKeyboardDim: () => {
+    const next = (get().keyboardDimLevel + 1) % DIM_LEVELS.length;
+    set({keyboardDimLevel: next});
+    ThemeStorage.saveJSON(KEYBOARD_DIM_LEVEL_KEY, next);
+  },
+
+  setPendingGifTab: tab => set({pendingGifTab: tab}),
+
   hydrate: async () => {
     const [
       locale,
@@ -384,6 +494,13 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       translateSourceLocale,
       translateTargetLocale,
       adultGifsEnabled,
+      numberRowEnabled,
+      hapticFeedbackEnabled,
+      keySoundEnabled,
+      swipeTypingTrailEnabled,
+      keyFontFamily,
+      toolbarOrder,
+      keyboardDimLevel,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -398,6 +515,13 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<string | null>(TRANSLATE_SOURCE_LOCALE_KEY, null),
       ThemeStorage.loadJSON<string | null>(TRANSLATE_TARGET_LOCALE_KEY, null),
       ThemeStorage.loadJSON<boolean>(ADULT_GIFS_ENABLED_KEY, false),
+      ThemeStorage.loadJSON<boolean>(NUMBER_ROW_ENABLED_KEY, false),
+      ThemeStorage.loadJSON<boolean>(HAPTIC_FEEDBACK_ENABLED_KEY, true),
+      ThemeStorage.loadJSON<boolean>(KEY_SOUND_ENABLED_KEY, false),
+      ThemeStorage.loadJSON<boolean>(SWIPE_TRAIL_ENABLED_KEY, true),
+      ThemeStorage.loadJSON<string | null>(KEY_FONT_FAMILY_KEY, null),
+      ThemeStorage.loadJSON<ToolId[]>(TOOLBAR_ORDER_KEY, ALL_TOOL_IDS),
+      ThemeStorage.loadJSON<number>(KEYBOARD_DIM_LEVEL_KEY, 0),
     ]);
     set({
       activeLocale: locale,
@@ -413,6 +537,25 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       translateSourceLocale,
       translateTargetLocale,
       adultGifsEnabled,
+      numberRowEnabled,
+      hapticFeedbackEnabled,
+      keySoundEnabled,
+      swipeTypingTrailEnabled,
+      keyFontFamily,
+      // A toolbar order saved before a tool existed (or from an older
+      // build) could be missing ids or contain unknown ones - reconcile
+      // against the current known set rather than trusting it blindly.
+      toolbarOrder: reconcileToolbarOrder(toolbarOrder),
+      keyboardDimLevel,
     });
   },
 }));
+
+// Guards against a corrupt/outdated persisted order (unknown ids, a tool
+// added since this was saved, duplicates) ever reaching the toolbar -
+// worth doing once here rather than everywhere toolbarOrder is read.
+function reconcileToolbarOrder(stored: ToolId[]): ToolId[] {
+  const known = stored.filter((id, i) => ALL_TOOL_IDS.includes(id) && stored.indexOf(id) === i);
+  const missing = ALL_TOOL_IDS.filter(id => !known.includes(id));
+  return [...known, ...missing];
+}

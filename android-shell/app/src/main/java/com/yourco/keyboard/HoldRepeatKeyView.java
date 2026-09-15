@@ -1,10 +1,13 @@
 package com.yourco.keyboard;
 
 import android.content.Context;
+import android.graphics.Outline;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.ViewConfiguration;
+import android.view.ViewOutlineProvider;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactContext;
 import com.facebook.react.bridge.WritableMap;
@@ -92,11 +95,50 @@ public class HoldRepeatKeyView extends ReactViewGroup {
         }
     };
 
+    // ReactViewGroup extends RN's own background/color drawing, but
+    // borderRadius specifically is wired up in ReactViewManager's own
+    // @ReactProp handlers, not in the generic ViewGroupManager base class
+    // this view's manager (HoldRepeatKeyViewManager) extends - so setting
+    // borderRadius from JS on this view type is silently a no-op with no
+    // explicit prop of our own. backgroundColor already worked (that one
+    // *is* on the generic base class), which is why the flat fill looked
+    // right while the corners stayed square. Clipping the view's own
+    // outline to a rounded rect gets the same visual result regardless of
+    // how the background itself was painted.
+    private float cornerRadiusPx = 0f;
+
+    private final ViewOutlineProvider roundedOutlineProvider = new ViewOutlineProvider() {
+        @Override
+        public void getOutline(View view, Outline outline) {
+            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), cornerRadiusPx);
+        }
+    };
+
     public HoldRepeatKeyView(Context context) {
         super(context);
         touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         dragThresholdPx = DEFAULT_DRAG_THRESHOLD_DP * getResources().getDisplayMetrics().density;
         setClickable(true);
+        setOutlineProvider(roundedOutlineProvider);
+    }
+
+    void setKeyCornerRadiusDp(float dp) {
+        cornerRadiusPx = dp * getResources().getDisplayMetrics().density;
+        setClipToOutline(cornerRadiusPx > 0f);
+        invalidateOutline();
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        // The outline's getOutline() above reads the view's current
+        // width/height, but a size change (keyboard-size setting,
+        // orientation, one-handed mode) doesn't re-invoke it on its own -
+        // without this, a resized key keeps clipping to its old bounds
+        // until something else happens to invalidate it.
+        if (cornerRadiusPx > 0f) {
+            invalidateOutline();
+        }
     }
 
     void setMode(String mode) {

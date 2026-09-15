@@ -11,10 +11,11 @@ const DEBOUNCE_MS = 350;
 /**
  * All the state/logic behind the translate feature, shared between two
  * places that render at different points in App.tsx's tree -
- * TranslationHeader (the language pills + input box, shown above the
- * generic toolbar) and the embedded keyboard rendered by renderPanel()
- * below it. Both need the same live state, so this is called once in
- * App.tsx and passed down, rather than each owning a separate copy.
+ * TranslatePanel (the language pills + typed/translation sheet, rendered
+ * above the generic toolbar) and the embedded keyboard rendered by
+ * renderPanel() below it, which is what actually feeds sourceText. Both
+ * need the same live state, so this is called once in App.tsx and passed
+ * down, rather than each owning a separate copy.
  */
 export function useTranslationPanel() {
   const {
@@ -36,6 +37,10 @@ export function useTranslationPanel() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The live-computed translation of sourceText - shown in its own
+  // "TRANSLATION" section rather than silently overwriting the real
+  // field as you type (see replaceText below for why that changed).
+  const [translatedText, setTranslatedText] = useState('');
   const [sourceLanguages, setSourceLanguages] = useState<LanguageOption[]>([]);
   const [targetLanguages, setTargetLanguages] = useState<LanguageOption[]>([]);
   const [languagesError, setLanguagesError] = useState<string | null>(null);
@@ -46,10 +51,6 @@ export function useTranslationPanel() {
   // same way Google Translate itself does.
   const [detectedSourceCode, setDetectedSourceCode] = useState<string | null>(null);
 
-  // What's actually sitting in the real focused field because *we* put it
-  // there - so a new translation can cleanly replace exactly that many
-  // characters rather than guessing at, or duplicating, prior output.
-  const lastCommittedRef = useRef('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
 
@@ -77,31 +78,26 @@ export function useTranslationPanel() {
 
   // Resets the panel's own state whenever it's left, so reopening it
   // starts a fresh translation rather than showing stale typed text.
-  // Deliberately does NOT touch the real field: whatever the last
-  // translation committed there is now the user's own content (like a
-  // GIF or emoji insertion), not something reopening the panel should
-  // retract. lastCommittedRef also resets, so the *next* translation
-  // (after reopening) inserts fresh text instead of trying to delete
-  // characters that logically aren't "ours" to remove anymore.
   useEffect(() => {
     if (isActive) return;
-    lastCommittedRef.current = '';
     setSourceText('');
+    setTranslatedText('');
     setError(null);
     setLoading(false);
   }, [isActive]);
 
-  // Replaces whatever we previously committed with `text` (or removes it
-  // entirely if `text` is empty) - the one place that ever touches the
-  // real field, so lastCommittedRef always reflects reality afterward.
-  const replaceCommitted = (text: string) => {
-    if (lastCommittedRef.current) {
-      InputConnection.deleteBackward(lastCommittedRef.current.length);
+  // The one place that ever touches the real field - a single explicit
+  // insert (like tapping a GIF or emoji), fired only when the user taps
+  // "Replace text with translation". This used to run automatically on
+  // every keystroke and delete-then-recommit to keep "ownership" of what
+  // it last inserted, which was surprising (typing quietly rewrote
+  // whatever the field already had) and fragile (any edit elsewhere broke
+  // its assumption about what it was allowed to delete). An explicit,
+  // one-shot commit has neither problem.
+  const replaceText = () => {
+    if (translatedText) {
+      InputConnection.commitText(translatedText);
     }
-    if (text) {
-      InputConnection.commitText(text);
-    }
-    lastCommittedRef.current = text;
   };
 
   const runTranslation = async (text: string, targetLocale: string, sourceLocale: string | null) => {
@@ -111,7 +107,7 @@ export function useTranslationPanel() {
     try {
       const result = await translateText(text, targetLocale, sourceLocale);
       if (requestId !== requestIdRef.current) return;
-      replaceCommitted(result.text);
+      setTranslatedText(result.text);
       if (!sourceLocale) {
         setDetectedSourceCode(result.sourceLocale);
       }
@@ -125,14 +121,13 @@ export function useTranslationPanel() {
     }
   };
 
-  // Debounced auto-translate as sourceText changes - this is what makes
-  // the real field's content live-update while typing, with no separate
-  // "translate now" action anywhere.
+  // Debounced live preview as sourceText changes - computes translatedText
+  // only; nothing here ever touches the real field (see replaceText).
   useEffect(() => {
     if (!isActive) return undefined;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!sourceText.trim()) {
-      replaceCommitted('');
+      setTranslatedText('');
       setError(null);
       setLoading(false);
       return undefined;
@@ -173,6 +168,7 @@ export function useTranslationPanel() {
 
   return {
     sourceText,
+    translatedText,
     cursorVisible,
     loading,
     error,
@@ -189,6 +185,7 @@ export function useTranslationPanel() {
     selectTarget,
     appendToSource,
     deleteFromSource,
+    replaceText,
   };
 }
 

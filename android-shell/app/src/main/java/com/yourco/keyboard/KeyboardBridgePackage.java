@@ -21,6 +21,7 @@ public class KeyboardBridgePackage implements ReactPackage {
         modules.add(new InputConnectionBridge(reactContext));
         modules.add(new KeyboardSizeModule(reactContext));
         modules.add(new GifCommitModule(reactContext));
+        modules.add(new SoundModule(reactContext));
         return modules;
     }
 

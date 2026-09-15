@@ -7,7 +7,7 @@ import {TranslationPanelState} from '../hooks/useTranslationPanel';
 /**
  * Full-panel modal overlay for picking the translate source/target
  * language - rendered as a sibling covering the whole keyboard root
- * (see App.tsx), not nested inside TranslationHeader, so the dimmed
+ * (see App.tsx), not nested inside TranslatePanel, so the dimmed
  * backdrop sits over the toolbar and keys too, matching the reference
  * Gboard screenshot rather than just dimming the header card.
  */

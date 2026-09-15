@@ -127,6 +127,43 @@ export const BUILT_IN_THEMES: KeyboardTheme[] = [
     accent: '#7FA8C9',
     isDark: true,
   },
+  // The three looks below come from the "Keyboard Toolbar Explorations"
+  // design board: a dark base ("Studio") plus its two named theme-axis
+  // variants ("Paper", "Signal"). Studio and Signal both use the board's
+  // stated brand mint (#22D3A6); Paper's ground/ink/accent are read
+  // directly off the board's own page chrome (its warm-grey body
+  // background and the deep-green link/heading colors it uses), not
+  // invented to match.
+  {
+    id: 'studio',
+    name: 'Studio',
+    keyBackground: '#1B211F',
+    keyPressedBackground: '#26302C',
+    keyText: '#EAF6F1',
+    panelBackground: '#111514',
+    accent: '#22D3A6',
+    isDark: true,
+  },
+  {
+    id: 'paper',
+    name: 'Paper',
+    keyBackground: '#FFFFFF',
+    keyPressedBackground: '#E4E0D6',
+    keyText: '#101314',
+    panelBackground: '#EFEDE7',
+    accent: '#0E9C77',
+    isDark: false,
+  },
+  {
+    id: 'signal',
+    name: 'Signal',
+    keyBackground: '#0D3128',
+    keyPressedBackground: '#134A3B',
+    keyText: '#E8FFF6',
+    panelBackground: '#06201A',
+    accent: '#22D3A6',
+    isDark: true,
+  },
 ];
 
 // A palette for the DIY creator's swatch pickers - not full themes, just
