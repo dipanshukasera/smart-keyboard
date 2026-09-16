@@ -13,6 +13,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection, ImeAction} from '../native-bridge/InputConnection';
 import {KeySound} from '../native-bridge/SoundModule';
+import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
 import type {KeyDef, LayoutDef} from '../layouts/types';
 import {buildStyledLayout} from '../layouts/layoutStyles';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
@@ -91,6 +92,15 @@ interface KeyboardLayoutProps {
   // and the word tracking lives in the shared store now (see App.tsx's
   // toolbar), which that instance has no business touching.
   showSuggestions?: boolean;
+  // Only TranslatePanel's redirected instance needs this: it's the one
+  // place this component renders *underneath* another whole screen's
+  // worth of content (the language pills + YOU TYPED + TRANSLATION +
+  // Replace button) rather than being the only content, so the two
+  // together used to exceed KeyboardReactView.java's height clamp and
+  // clip the bottom row of keys off entirely. Shrinks vertical padding
+  // the same way landscape's verticalScale already does, just less
+  // aggressively (there's more room to work with in portrait).
+  compact?: boolean;
 }
 
 // Gboard renders shift/delete/enter/emoji as icon glyphs rather than words
@@ -115,6 +125,7 @@ export function KeyboardLayout({
   onDeleteBackward,
   onEnter,
   showSuggestions = true,
+  compact = false,
 }: KeyboardLayoutProps = {}) {
   const {
     activeLocale,
@@ -172,7 +183,7 @@ export function KeyboardLayout({
   // smaller-looking.
   const {width: windowWidth, height: windowHeight} = useWindowDimensions();
   const isLandscape = windowWidth > windowHeight;
-  const verticalScale = isLandscape ? 0.42 : 1;
+  const verticalScale = isLandscape ? 0.42 : compact ? 0.78 : 1;
 
   // Keyboard size setting (see ThemeCustomizer) - scales key padding/font/
   // icon size directly rather than needing any native change: the taller
@@ -216,6 +227,11 @@ export function KeyboardLayout({
   // Layout style (QWERTY/AZERTY/QWERTZ/Dvorak/Colemak) only makes sense for
   // English today - it's a Latin letter-arrangement choice, not a language.
   const layout = activeLocale === 'en-US' ? buildStyledLayout(layoutStyle, localeLayout) : localeLayout;
+
+  // See styles.pressOverlay - a translucent wash that reads as "pressed"
+  // regardless of which theme's specific key/pressed-background pair is
+  // active, rather than relying on that pair alone being visibly distinct.
+  const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.14)';
 
   const commitText = (text: string) => {
     if (onCommitText) {
@@ -464,6 +480,15 @@ export function KeyboardLayout({
   const spaceKeyDef: KeyDef = {key: 'space', action: 'space'};
   const spaceDragModeRef = useRef(false);
   const spaceDragStepsRef = useRef(0);
+  // Gboard: holding the spacebar (without dragging - see the cursor-move
+  // gesture below, which is a different, intentional use of the same key)
+  // opens Android's own keyboard-switcher dialog. Fired from a plain JS
+  // timer rather than HoldRepeatKeyView's native one - unlike the delete
+  // key, nothing here needs a *repeating* action, and the space key
+  // already has its own working gesture handling via this PanResponder,
+  // so adding a native view just for this one timer isn't worth it.
+  const spaceLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spaceLongPressFiredRef = useRef(false);
   const spacePanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -471,7 +496,17 @@ export function KeyboardLayout({
       onPanResponderGrant: () => {
         spaceDragModeRef.current = false;
         spaceDragStepsRef.current = 0;
+        spaceLongPressFiredRef.current = false;
         setPressedKeyIdRef.current('space');
+        spaceLongPressTimerRef.current = setTimeout(() => {
+          // A drag already in progress (cursor move) is a different,
+          // already-committed gesture - don't also pop the picker over it.
+          if (spaceDragModeRef.current) return;
+          spaceLongPressFiredRef.current = true;
+          fireKeyFeedback();
+          setPressedKeyIdRef.current(null);
+          ImeSwitcher.showPicker();
+        }, LONG_PRESS_NUMBER_DELAY_MS);
       },
       onPanResponderMove: (_evt, gestureState) => {
         // A redirected instance (GIF search) has no real cursor to move -
@@ -480,6 +515,13 @@ export function KeyboardLayout({
         if (!cursorControlEnabled) return;
         if (!spaceDragModeRef.current && Math.abs(gestureState.dx) > DRAG_MODE_THRESHOLD_PX) {
           spaceDragModeRef.current = true;
+          // Dragging to move the cursor is unambiguous intent - cancel the
+          // pending picker so it can't fire out from under an in-progress
+          // drag a moment later.
+          if (spaceLongPressTimerRef.current) {
+            clearTimeout(spaceLongPressTimerRef.current);
+            spaceLongPressTimerRef.current = null;
+          }
         }
         if (!spaceDragModeRef.current) return;
         const targetSteps = Math.trunc(gestureState.dx / PIXELS_PER_CHAR);
@@ -493,7 +535,11 @@ export function KeyboardLayout({
         }
       },
       onPanResponderRelease: () => {
-        if (!spaceDragModeRef.current) {
+        if (spaceLongPressTimerRef.current) {
+          clearTimeout(spaceLongPressTimerRef.current);
+          spaceLongPressTimerRef.current = null;
+        }
+        if (!spaceDragModeRef.current && !spaceLongPressFiredRef.current) {
           handleKeyPressRef.current(spaceKeyDef);
         }
         spaceDragModeRef.current = false;
@@ -542,6 +588,9 @@ export function KeyboardLayout({
               <Text style={{color: theme.keyText, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
                 {digit}
               </Text>
+              {pressedKeyId === `numrow-${index}` && (
+                <View pointerEvents="none" style={[styles.pressOverlay, {backgroundColor: pressOverlayColor}]} />
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -585,6 +634,18 @@ export function KeyboardLayout({
                   ? theme.accent
                   : theme.keyText;
 
+            const pressOverlay = isKeyCurrentlyPressed ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.pressOverlay,
+                  isPill && styles.pressOverlayPill,
+                  isAccent && styles.pressOverlayAccent,
+                  {backgroundColor: pressOverlayColor},
+                ]}
+              />
+            ) : null;
+
             // Delete: hold-to-repeat and drag-to-select both need reliable
             // native touch timing (see HoldRepeatKeyView.java for why plain
             // PanResponder/TouchableOpacity weren't good enough for this).
@@ -617,6 +678,7 @@ export function KeyboardLayout({
                   ) : iconName ? (
                     <Icon name={iconName} size={keyIconSize} color={textColor} />
                   ) : null}
+                  {pressOverlay}
                 </HoldRepeatKeyView>
               );
             }
@@ -636,6 +698,7 @@ export function KeyboardLayout({
                   ]}
                   {...spacePanResponder.panHandlers}>
                   {iconName ? <Icon name={iconName} size={keyIconSize} color={textColor} /> : null}
+                  {pressOverlay}
                 </View>
               );
             }
@@ -682,6 +745,7 @@ export function KeyboardLayout({
                       {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                     </Text>
                   )}
+                  {pressOverlay}
                 </HoldRepeatKeyView>
               );
             }
@@ -712,6 +776,7 @@ export function KeyboardLayout({
                     {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                   </Text>
                 )}
+                {pressOverlay}
               </TouchableOpacity>
             );
           })}
@@ -770,6 +835,27 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   accentKey: {
+    borderRadius: 24,
+  },
+  // A clearly-visible press highlight on top of the resting-state
+  // backgroundColor swap above - that swap alone (theme.keyPressedBackground)
+  // is too close to theme.keyBackground on several themes to read as
+  // "this key is pressed" rather than just looking slightly different in
+  // a screenshot. A translucent white-on-dark/black-on-light wash is
+  // visible against literally any theme's key color, unlike a fixed
+  // tint tuned to one palette.
+  pressOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 13,
+  },
+  pressOverlayPill: {
+    borderRadius: 20,
+  },
+  pressOverlayAccent: {
     borderRadius: 24,
   },
   numberHint: {

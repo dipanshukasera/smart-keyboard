@@ -156,6 +156,7 @@ export default function App() {
                 same slot every other panel's keyboard/content occupies). */}
             <KeyboardLayout
               showSuggestions={false}
+              compact
               onCommitText={translation.appendToSource}
               onDeleteBackward={translation.deleteFromSource}
               onEnter={() => translation.appendToSource('\n')}

@@ -32,7 +32,7 @@ export function TranslatePanel({state}: {state: TranslationPanelState}) {
   } = state;
 
   return (
-    <PanelSheet title="Translate">
+    <PanelSheet title="Translate" compact>
       <View style={styles.pillRow}>
         <TouchableOpacity
           style={[styles.pill, {backgroundColor: theme.keyBackground}]}
@@ -57,7 +57,7 @@ export function TranslatePanel({state}: {state: TranslationPanelState}) {
       </View>
 
       <Text style={[styles.sectionLabel, {color: theme.keyText + '99'}]}>YOU TYPED</Text>
-      <View style={[styles.box, {backgroundColor: theme.keyBackground}]}>
+      <View style={[styles.box, styles.boxCompact, {backgroundColor: theme.keyBackground}]}>
         {!sourceText && (
           <Text style={{color: theme.keyText + '99'}} numberOfLines={2}>
             Type to translate
@@ -73,8 +73,14 @@ export function TranslatePanel({state}: {state: TranslationPanelState}) {
         )}
       </View>
 
-      <Text style={[styles.sectionLabel, {color: theme.keyText + '99', marginTop: 12}]}>TRANSLATION</Text>
-      <View style={[styles.box, styles.translationBox, {borderColor: theme.accent, backgroundColor: theme.keyBackground}]}>
+      <Text style={[styles.sectionLabel, {color: theme.keyText + '99', marginTop: 6}]}>TRANSLATION</Text>
+      <View
+        style={[
+          styles.box,
+          styles.boxCompact,
+          styles.translationBox,
+          {borderColor: theme.accent, backgroundColor: theme.keyBackground},
+        ]}>
         {loading && <ActivityIndicator color={theme.accent} size="small" />}
         {!loading && !!translatedText && (
           <Text style={{color: theme.keyText}} numberOfLines={4}>
@@ -89,7 +95,11 @@ export function TranslatePanel({state}: {state: TranslationPanelState}) {
       </View>
 
       <TouchableOpacity
-        style={[styles.replaceButton, {backgroundColor: theme.accent, opacity: translatedText ? 1 : 0.4}]}
+        style={[
+          styles.replaceButton,
+          styles.replaceButtonCompact,
+          {backgroundColor: theme.accent, opacity: translatedText ? 1 : 0.4},
+        ]}
         disabled={!translatedText}
         onPress={replaceText}>
         <Text style={styles.replaceButtonText}>Replace text with translation</Text>
@@ -98,18 +108,23 @@ export function TranslatePanel({state}: {state: TranslationPanelState}) {
   );
 }
 
+// This whole sheet renders above the still-visible embedded keyboard
+// (see App.tsx), sharing the same native height budget a plain keyboard
+// alone fits into - every value below is deliberately tighter than a
+// standalone screen would need, to leave room for the keyboard under it.
+// See PanelSheet's `compact` prop for the matching header treatment.
 const styles = StyleSheet.create({
   pillRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   pill: {
     flexShrink: 1,
     maxWidth: '42%',
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 5,
     borderRadius: 16,
   },
   pillArrow: {
@@ -119,7 +134,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 3,
   },
   box: {
     borderRadius: 14,
@@ -127,6 +142,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     minHeight: 44,
     justifyContent: 'center',
+  },
+  boxCompact: {
+    paddingVertical: 5,
+    minHeight: 32,
   },
   boxContent: {
     flexDirection: 'row',
@@ -145,6 +164,10 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingVertical: 13,
     alignItems: 'center',
+  },
+  replaceButtonCompact: {
+    marginTop: 8,
+    paddingVertical: 9,
   },
   // Matches the app's existing convention for text on an accent-colored
   // background (see GifStickerPanel's feedbackBanner) rather than a
