@@ -63,6 +63,11 @@ const PIXELS_PER_CHAR = 18;
 // since a held key's PanResponder move-event stream starves setInterval.
 const HOLD_REPEAT_INITIAL_DELAY_MS = 400;
 const HOLD_REPEAT_INTERVAL_MS = 60;
+// A quick tap's press-in and press-out land within a few dozen ms of each
+// other - often inside the same render - so clearing the highlight
+// immediately on release meant it never actually reached the screen. Keep
+// it up at least this long after release so every tap visibly registers.
+const PRESS_HIGHLIGHT_MIN_MS = 90;
 export const PILL_BACKGROUND = '#5F6368';
 export const PILL_TEXT = '#FFFFFF';
 
@@ -166,6 +171,29 @@ export function KeyboardLayout({
   // highlight while held - previously only shift/delete ever changed
   // background on press, every other key gave no feedback at all.
   const [pressedKeyId, setPressedKeyId] = useState<string | null>(null);
+  // See PRESS_HIGHLIGHT_MIN_MS - press sets the highlight immediately,
+  // release clears it after a short hold rather than instantly. A new press
+  // cancels any pending clear, so fast typing hands the highlight straight
+  // from one key to the next.
+  const pressReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressKey = (id: string) => {
+    if (pressReleaseTimerRef.current) clearTimeout(pressReleaseTimerRef.current);
+    pressReleaseTimerRef.current = null;
+    setPressedKeyId(id);
+  };
+  const releaseKey = () => {
+    if (pressReleaseTimerRef.current) clearTimeout(pressReleaseTimerRef.current);
+    pressReleaseTimerRef.current = setTimeout(() => {
+      pressReleaseTimerRef.current = null;
+      setPressedKeyId(null);
+    }, PRESS_HIGHLIGHT_MIN_MS);
+  };
+  useEffect(
+    () => () => {
+      if (pressReleaseTimerRef.current) clearTimeout(pressReleaseTimerRef.current);
+    },
+    [],
+  );
   // Which top-row key index is currently showing its number in an enlarged
   // popup above the key - Gboard shows this the moment the long-press
   // fires (not just silently swapping in the character), so holding
@@ -231,7 +259,7 @@ export function KeyboardLayout({
   // See styles.pressOverlay - a translucent wash that reads as "pressed"
   // regardless of which theme's specific key/pressed-background pair is
   // active, rather than relying on that pair alone being visibly distinct.
-  const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.14)';
+  const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
   const commitText = (text: string) => {
     if (onCommitText) {
@@ -391,6 +419,8 @@ export function KeyboardLayout({
   handleKeyPressRef.current = handleKeyPress;
   const setPressedKeyIdRef = useRef(setPressedKeyId);
   setPressedKeyIdRef.current = setPressedKeyId;
+  const releaseKeyRef = useRef(releaseKey);
+  releaseKeyRef.current = releaseKey;
 
   // --- Delete key: native HoldRepeatKeyView handlers --------------------
   // See android-shell/.../HoldRepeatKeyView.java for why hold-to-repeat and
@@ -458,7 +488,7 @@ export function KeyboardLayout({
   };
 
   // --- Number-hint keys (row 0): native HoldRepeatKeyView handlers ------
-  const handleNumberHintPressStart = (keyId: string) => setPressedKeyId(keyId);
+  const handleNumberHintPressStart = (keyId: string) => pressKey(keyId);
 
   const handleNumberHintLongPress = (keyIndex: number) => {
     fireKeyFeedback();
@@ -469,7 +499,7 @@ export function KeyboardLayout({
   };
 
   const handleNumberHintPressEnd = (keyDef: KeyDef, event: HoldRepeatPressEndEvent) => {
-    setPressedKeyId(null);
+    releaseKey();
     setNumberPreviewIndex(null);
     const {longPressFired, movedOutside, dragMode} = event.nativeEvent;
     if (!longPressFired && !movedOutside && !dragMode) {
@@ -544,7 +574,7 @@ export function KeyboardLayout({
         }
         spaceDragModeRef.current = false;
         spaceDragStepsRef.current = 0;
-        setPressedKeyIdRef.current(null);
+        releaseKeyRef.current();
       },
     }),
   ).current;
@@ -580,11 +610,12 @@ export function KeyboardLayout({
                   paddingVertical: keyPaddingVertical,
                 },
               ]}
+              activeOpacity={1}
               onPressIn={() => {
-                setPressedKeyId(`numrow-${index}`);
+                pressKey(`numrow-${index}`);
                 handleKeyPress({key: digit});
               }}
-              onPressOut={() => setPressedKeyId(null)}>
+              onPressOut={releaseKey}>
               <Text style={{color: theme.keyText, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
                 {digit}
               </Text>
@@ -764,11 +795,16 @@ export function KeyboardLayout({
                   isAccent && styles.accentKey,
                   {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                 ]}
+                // activeOpacity 1: TouchableOpacity's default fades the whole
+                // key (pressOverlay included) to 20% while held, which on
+                // the light theme blended a white key into the near-white
+                // tray - the press highlight was effectively invisible.
+                activeOpacity={1}
                 onPressIn={() => {
-                  setPressedKeyId(keyId);
+                  pressKey(keyId);
                   handleKeyPress(keyDef);
                 }}
-                onPressOut={() => setPressedKeyId(null)}>
+                onPressOut={releaseKey}>
                 {iconName ? (
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (

@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
   NativeModules,
@@ -106,6 +107,21 @@ export function GifStickerPanel() {
   // typeable field - a blinking caret, shown only while isTyping so it
   // reads the same way a real focused cursor would.
   const [cursorVisible, setCursorVisible] = useState(true);
+  // One shared pulse drives every skeleton placeholder (the loading grid
+  // and each tile still waiting on its image) - a separate looping
+  // animation per tile would mean dozens running at once on a full page.
+  const skeletonPulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonPulse, {toValue: 1, duration: 650, useNativeDriver: true}),
+        Animated.timing(skeletonPulse, {toValue: 0.45, duration: 650, useNativeDriver: true}),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [skeletonPulse]);
+  const skeletonColor = theme.keyText + '22';
 
   useEffect(() => {
     queryRef.current = query;
@@ -491,7 +507,21 @@ export function GifStickerPanel() {
       )}
 
       {isTyping ? null : loading ? (
-        <ActivityIndicator color={theme.accent} style={styles.loading} />
+        // A grid of placeholder tiles the same shape as the real results,
+        // rather than a lone spinner - the panel keeps its size, and the
+        // results visibly fill in where the skeleton was.
+        <View style={[styles.grid, styles.resultsGrid]}>
+          {[0, 1, 2].map(row => (
+            <View key={row} style={styles.skeletonRow}>
+              {[0, 1, 2].map(col => (
+                <Animated.View
+                  key={col}
+                  style={[styles.skeletonCell, {backgroundColor: skeletonColor, opacity: skeletonPulse}]}
+                />
+              ))}
+            </View>
+          ))}
+        </View>
       ) : error ? (
         <Text style={[styles.statusMessage, {color: theme.keyText}]}>{error}</Text>
       ) : query.trim() && results.length === 0 ? (
@@ -518,7 +548,7 @@ export function GifStickerPanel() {
             ListFooterComponent={renderGridFooter()}
             renderItem={({item}) => (
               <TouchableOpacity style={styles.cell} onPress={() => selectGif(item)}>
-                <Image source={{uri: item.previewUrl}} style={styles.thumb} resizeMode="cover" />
+                <GifThumb uri={item.previewUrl} pulse={skeletonPulse} skeletonColor={skeletonColor} />
                 {/* Video results (18+) render as their still frame with a
                     play badge rather than autoplaying. A grid of ~78 live
                     players spun up ~78 hardware decoders at once, which
@@ -546,6 +576,24 @@ export function GifStickerPanel() {
         <ExpressionModeBar active="gif" onDelete={() => deleteFromQuery(1)} />
       )}
     </View>
+  );
+}
+
+// A results tile that shows a pulsing placeholder until its image has
+// actually downloaded - the search request returning only means the URLs
+// are known, and each thumbnail can take a while longer to arrive.
+function GifThumb({uri, pulse, skeletonColor}: {uri: string; pulse: Animated.Value; skeletonColor: string}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <>
+      {!loaded && (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.thumbSkeleton, {backgroundColor: skeletonColor, opacity: pulse}]}
+        />
+      )}
+      <Image source={{uri}} style={styles.thumb} resizeMode="cover" onLoadEnd={() => setLoaded(true)} />
+    </>
   );
 }
 
@@ -599,8 +647,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-  loading: {
-    marginVertical: 12,
+  skeletonRow: {
+    flexDirection: 'row',
+  },
+  skeletonCell: {
+    flex: 1,
+    aspectRatio: 2,
+    margin: 2,
+    borderRadius: 4,
   },
   statusMessage: {
     textAlign: 'center',
@@ -680,6 +734,14 @@ const styles = StyleSheet.create({
   thumb: {
     width: '100%',
     height: '100%',
+    borderRadius: 4,
+  },
+  thumbSkeleton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderRadius: 4,
   },
 });

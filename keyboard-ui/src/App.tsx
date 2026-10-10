@@ -392,12 +392,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-evenly',
     paddingHorizontal: 6,
     paddingVertical: 6,
+    // Fixed rather than content-sized: the icon row (brightness icon + its
+    // dim dots underneath, 42dp) is taller than the suggestion strip
+    // (plain 36dp chips), so swapping between them on every keystroke
+    // resized the whole keyboard window and made it visibly jump.
+    height: 54,
   },
   // Landscape's much shorter screen otherwise clips the keyboard's bottom
   // row off-screen (see KeyboardLayout.tsx's verticalScale) - the
   // toolbar's own fixed padding is part of that same overflow budget.
   toolbarLandscape: {
     paddingVertical: 2,
+    // Tallest landscape item is LanguageSwitcher's fixed 36dp button.
+    height: 40,
   },
   toolbarIcon: {
     width: 36,
