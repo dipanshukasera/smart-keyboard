@@ -4,10 +4,12 @@ const {
   searchStickers: searchAllStickerProviders,
   getTrendingStickers,
   searchAdultGifs,
+  adultGifsEnabled,
   PAGE_SIZE,
   ProviderNotConfiguredError,
   AdultContentDisabledError,
 } = require('../services/gifProviders');
+const {convertToGif, ConversionRejectedError} = require('../services/gifConverter');
 
 /**
  * Reads the ?page= query param. Anything that isn't a positive integer
@@ -106,4 +108,37 @@ async function searchAdultGifsHandler(req, res) {
   }
 }
 
-module.exports = {searchGifs, trendingGifs, searchStickers, trendingStickers, searchAdultGifsHandler};
+// Converts one 18+ result's mp4 into a .gif, for chat fields that take
+// images but not video (see gifConverter.js). Same server opt-in as the
+// search itself - it only ever converts Redgifs media.
+async function convertAdultGifHandler(req, res) {
+  if (!adultGifsEnabled()) {
+    return res.status(403).json({error: 'Adult GIFs aren’t enabled on this server.'});
+  }
+  const {src} = req.query;
+  if (!src || typeof src !== 'string') {
+    return res.status(400).json({error: 'Query parameter "src" is required'});
+  }
+
+  try {
+    const gifPath = await convertToGif(src);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.type('image/gif');
+    res.sendFile(gifPath);
+  } catch (error) {
+    if (error instanceof ConversionRejectedError) {
+      return res.status(400).json({error: error.message});
+    }
+    console.error(`GIF conversion failed for ${src}: ${error.message}`);
+    res.status(502).json({error: 'Couldn’t convert this clip to a GIF'});
+  }
+}
+
+module.exports = {
+  searchGifs,
+  trendingGifs,
+  searchStickers,
+  trendingStickers,
+  searchAdultGifsHandler,
+  convertAdultGifHandler,
+};

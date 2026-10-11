@@ -204,16 +204,33 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
 
         HttpURLConnection connection = (HttpURLConnection) new URL(remoteUrl).openConnection();
         connection.setConnectTimeout(10000);
-        connection.setReadTimeout(15000);
+        // 45s, not 15s: an 18+ clip converted to GIF on the backend
+        // (/api/gif/adult/convert.gif) sends nothing until ffmpeg finishes,
+        // which takes ~8-12s on Render's free tier - more if the service
+        // is also waking from idle. Ordinary downloads are unaffected;
+        // this only bounds a stalled connection.
+        connection.setReadTimeout(45000);
+        // Written to a temp file and renamed only once complete: the cache
+        // check above treats any existing file as a finished download, so
+        // a timeout partway through used to leave a truncated file that
+        // was then re-sent on every later tap.
+        File partFile = new File(cacheDir, outFile.getName() + ".part");
         try (InputStream in = connection.getInputStream();
-             FileOutputStream out = new FileOutputStream(outFile)) {
+             FileOutputStream out = new FileOutputStream(partFile)) {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = in.read(buffer)) != -1) {
                 out.write(buffer, 0, read);
             }
+        } catch (Exception e) {
+            partFile.delete();
+            throw e;
         } finally {
             connection.disconnect();
+        }
+        if (!partFile.renameTo(outFile)) {
+            partFile.delete();
+            throw new Exception("Couldn't move downloaded file into the cache");
         }
         return outFile;
     }

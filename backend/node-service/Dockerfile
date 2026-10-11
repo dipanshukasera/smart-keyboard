@@ -7,6 +7,9 @@
 
 FROM node:20-alpine AS base
 WORKDIR /app
+# Converts 18+ mp4 clips to .gif on request (src/services/gifConverter.js).
+# In the base stage so the dev image can exercise it too.
+RUN apk add --no-cache ffmpeg
 COPY package.json package-lock.json* ./
 
 # Development image, used by infra/docker-compose.yml via `target: dev`.

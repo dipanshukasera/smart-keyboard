@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
-import {apiClient} from '../services/api';
+import {API_BASE_URL, apiClient} from '../services/api';
 import {KeyboardLayout} from './KeyboardLayout';
 import {ExpressionModeBar} from './ExpressionModeBar';
 import {GifCommit} from '../native-bridge/GifCommit';
@@ -35,6 +35,13 @@ interface GifResult {
 type ContentType = 'gif' | 'sticker' | 'adult';
 
 const {ClipboardModule} = NativeModules;
+
+// The backend's mp4 -> .gif endpoint for one 18+ clip. The path ends in
+// .gif because GifCommitModule picks the MIME type it offers the chat app
+// from the URL's extension.
+function convertedGifUrl(videoUrl: string): string {
+  return `${API_BASE_URL}/api/gif/adult/convert.gif?src=${encodeURIComponent(videoUrl)}`;
+}
 
 /**
  * Turns an axios failure into something that points at the actual
@@ -350,28 +357,46 @@ export function GifStickerPanel() {
     // to the clipboard when the field itself doesn't declare support for
     // rich content, or the download/commit fails for some other reason.
     // 18+ items are mp4 (Redgifs has no GIF), and far fewer fields accept
-    // video than images - so send the animation when it's taken, and fall
-    // back to the still frame before giving up on the clipboard, rather
-    // than dropping straight to a pasted link.
-    const sent = gif.videoUrl
-      ? (await GifCommit.commitGif(gif.videoUrl)) || (await GifCommit.commitGif(gif.fullUrl))
-      : await GifCommit.commitGif(gif.fullUrl);
-    if (sent) {
+    // video than images. So: the mp4 where it's taken, else a real .gif
+    // converted from it on the backend, else the still frame, and only
+    // then a pasted link.
+    let sentUrl: string | null = null;
+    if (gif.videoUrl) {
+      if (await GifCommit.commitGif(gif.videoUrl)) {
+        sentUrl = gif.videoUrl;
+      } else if (await GifCommit.isRichContentSupported()) {
+        // Conversion takes several seconds (see gifConverter.js), so say
+        // something is happening rather than looking like a dead tap.
+        // Only shown when the field takes GIFs - otherwise commitGif
+        // declines before requesting a conversion at all.
+        showFeedback('Making GIF…');
+        const gifUrl = convertedGifUrl(gif.videoUrl);
+        if (await GifCommit.commitGif(gifUrl)) {
+          sentUrl = gifUrl;
+        }
+      }
+    }
+    if (!sentUrl && (await GifCommit.commitGif(gif.fullUrl))) {
+      sentUrl = gif.fullUrl;
+    }
+    if (sentUrl) {
       showFeedback('Sent!');
     } else {
       ClipboardModule?.setClipboardText(gif.videoUrl || gif.fullUrl);
       showFeedback('This app doesn’t accept images directly - link copied, paste it instead');
     }
-    cacheForOffline(gif);
+    // A converted GIF is already sitting in the native download cache, so
+    // the recents entry can be the animation rather than the still frame.
+    cacheForOffline(gif, sentUrl && sentUrl !== gif.videoUrl ? sentUrl : gif.fullUrl);
   };
 
   // "Used" (searched-for and tapped, not merely scrolled past) is the
   // trigger for offline availability - caching every thumbnail just from
   // browsing would download far more than anyone will ever revisit.
-  const cacheForOffline = async (gif: GifResult) => {
+  const cacheForOffline = async (gif: GifResult, fullUrl: string) => {
     const [previewUri, fullUri] = await Promise.all([
       GifCommit.cacheGif(gif.previewUrl),
-      GifCommit.cacheGif(gif.fullUrl),
+      GifCommit.cacheGif(fullUrl),
     ]);
     if (previewUri && fullUri) {
       addRecentGif({id: gif.id, previewUri, fullUri, timestamp: Date.now()});
