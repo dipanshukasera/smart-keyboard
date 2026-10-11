@@ -3,6 +3,7 @@ import {FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore, ClipboardEntry} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
+import {PanelSheet} from './PanelSheet';
 
 // Gboard's clipboard tool: recent copies you can paste again, individually
 // dismiss, or clear entirely. Entries are captured whenever this panel
@@ -18,15 +19,16 @@ export function ClipboardPanel() {
   };
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
-      <View style={styles.header}>
-        <Text style={{color: theme.keyText, fontWeight: '600'}}>Clipboard</Text>
-        {clipboardHistory.length > 0 && (
+    <PanelSheet
+      title="Clipboard"
+      headerAction={
+        clipboardHistory.length > 0 ? (
           <TouchableOpacity onPress={clearClipboardHistory}>
-            <Text style={{color: theme.accent, fontSize: 12}}>Clear all</Text>
+            <Text style={{color: theme.accent, fontSize: 13, fontWeight: '600'}}>Clear all</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        ) : null
+      }>
+      <View style={styles.body}>
 
       {clipboardHistory.length === 0 ? (
         <Text style={[styles.empty, {color: theme.keyText + '99'}]}>Nothing copied yet</Text>
@@ -49,20 +51,16 @@ export function ClipboardPanel() {
           )}
         />
       )}
-    </View>
+      </View>
+    </PanelSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    height: 260,
-    padding: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+  // PanelSheet adds ~70dp of padding and header, keeping the panel close
+  // to its old 260dp total.
+  body: {
+    height: 196,
   },
   empty: {
     textAlign: 'center',

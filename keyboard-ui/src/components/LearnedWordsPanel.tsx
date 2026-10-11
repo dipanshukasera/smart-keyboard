@@ -2,19 +2,22 @@ import React from 'react';
 import {FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
+import {PanelSheet} from './PanelSheet';
 
 // CleverKeys calls this a "learned-data manager": every word the personal
 // dictionary has picked up from actual typing (see store's learnWord),
 // browsable and individually deletable - not just an opaque on/off switch.
 export function LearnedWordsPanel() {
-  const {theme, learnedWords, removeLearnedWord} = useKeyboardStore();
+  const {theme, learnedWords, removeLearnedWord, setActivePanel} = useKeyboardStore();
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
-      <View style={styles.header}>
-        <Text style={{color: theme.keyText, fontWeight: '600'}}>Learned Words</Text>
-        <Text style={{color: theme.keyText + '99', fontSize: 12}}>{learnedWords.length}</Text>
-      </View>
+    // Opened from Settings, so closing goes back there rather than to the
+    // keyboard.
+    <PanelSheet
+      title="Learned words"
+      onClose={() => setActivePanel('settings')}
+      headerAction={<Text style={{color: theme.keyText + '99', fontSize: 13}}>{learnedWords.length}</Text>}>
+      <View style={styles.body}>
 
       {learnedWords.length === 0 ? (
         <Text style={[styles.empty, {color: theme.keyText + '99'}]}>
@@ -37,20 +40,16 @@ export function LearnedWordsPanel() {
           )}
         />
       )}
-    </View>
+      </View>
+    </PanelSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    height: 260,
-    padding: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+  // PanelSheet adds ~70dp of padding and header, keeping the panel close
+  // to its old 260dp total.
+  body: {
+    height: 196,
   },
   empty: {
     textAlign: 'center',

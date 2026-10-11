@@ -31,13 +31,6 @@ import {useTranslationPanel} from './hooks/useTranslationPanel';
 
 const {ClipboardModule, KeyboardSizeModule} = NativeModules;
 
-// Panels that render their own way back (PanelSheet's X, or - for
-// ThemeCustomizer - its own "Done" link) don't need the toolbar row on
-// top of that; every other non-keyboard panel (gif/emoji/clipboard/
-// learnedWords/symbols) predates that pattern and still relies on the
-// toolbar's single "back to keyboard" icon, same as before this redesign.
-const SELF_CLOSING_PANELS = new Set(['allTools', 'font', 'settings', 'toolbarOrder', 'translate', 'themeCustomizer']);
-
 export default function App() {
   const {
     activePanel,
@@ -193,17 +186,20 @@ export default function App() {
   // the icons and suggestions occupied separate rows at the same time.
   const showSuggestionStrip = activePanel === 'keyboard' && !isToolbarExpanded && suggestions.length > 0;
 
-  // A payment/PIN/phone-number field gets *only* the number pad - no
-  // toolbar, no translation bar. Those are chrome for a general typing
-  // surface; a numeric field is single-purpose and Gboard doesn't show
-  // its icon row there either.
-  const isNumericPad = activePanel === 'numericPad';
-  const hidesToolbarRow = SELF_CLOSING_PANELS.has(activePanel);
+  // The tool icons show on the letter keyboard and on ?123, which share a
+  // toolbar like Gboard's (so switching between them doesn't resize the
+  // window). Every other panel has no toolbar row at all: there used to be
+  // a lone "back to keyboard" icon here, but each of them now has its own
+  // way back - the ABC key (GIF, emoji, ?123) or a close button (clipboard,
+  // learned words, settings and the other sheets). A numeric field's
+  // number pad gets no toolbar either - it's single-purpose, and Gboard
+  // shows no icon row there.
+  const showsToolbarRow = activePanel === 'keyboard' || activePanel === 'symbols';
 
   return (
     <View style={[styles.root, {backgroundColor: theme.panelBackground}]}>
       <View onLayout={handleContentLayout}>
-        {!isNumericPad && !hidesToolbarRow && (
+        {showsToolbarRow && (
         <View style={[styles.toolbar, isLandscape && styles.toolbarLandscape]}>
           {showSuggestionStrip ? (
             <>
@@ -221,7 +217,7 @@ export default function App() {
                 </TouchableOpacity>
               ))}
             </>
-          ) : activePanel === 'keyboard' ? (
+          ) : (
             <>
               <ToolbarIcon
                 iconName="more-horiz"
@@ -263,16 +259,6 @@ export default function App() {
               ))}
               <LanguageSwitcher />
             </>
-          ) : (
-            // gif/emoji/clipboard/learnedWords/symbols predate the newer
-            // self-closing sheets and have no close button of their own -
-            // this is their only way back.
-            <ToolbarIcon
-              iconName="keyboard"
-              onPress={() => setActivePanel('keyboard')}
-              theme={theme}
-              compact={isLandscape}
-            />
           )}
         </View>
         )}
