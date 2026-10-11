@@ -38,6 +38,7 @@ export default function App() {
     theme,
     hydrate,
     suggestions,
+    emojiSuggestion,
     typedWord,
     isToolbarExpanded,
     setToolbarExpanded,
@@ -120,6 +121,17 @@ export default function App() {
     updateTypedWord('');
   };
 
+  // Keeps the typed word and adds the emoji after it ("love" -> "love ❤️ "),
+  // as Gboard's emoji chip does. Recorded the same way as a word
+  // suggestion, so an immediate backspace takes it back off again.
+  const applyEmojiSuggestion = (emoji: string) => {
+    InputConnection.deleteBackward(typedWord.length);
+    const applied = `${typedWord} ${emoji}`;
+    InputConnection.commitText(applied + ' ');
+    setLastSuggestion({original: typedWord, applied});
+    updateTypedWord('');
+  };
+
   // The outer root View is forced to a fixed native height (see
   // KeyboardReactView.java's onMeasure override) so it doesn't balloon to
   // fill the whole screen. This inner wrapper isn't stretched to match, so
@@ -184,7 +196,8 @@ export default function App() {
   // the icon row collapses down to one icon (tap to bring the icons back)
   // and the rest of the row shows suggestion chips instead - previously
   // the icons and suggestions occupied separate rows at the same time.
-  const showSuggestionStrip = activePanel === 'keyboard' && !isToolbarExpanded && suggestions.length > 0;
+  const showSuggestionStrip =
+    activePanel === 'keyboard' && !isToolbarExpanded && (suggestions.length > 0 || !!emojiSuggestion);
 
   // The tool icons show on the letter keyboard and on ?123, which share a
   // toolbar like Gboard's (so switching between them doesn't resize the
@@ -209,13 +222,22 @@ export default function App() {
                 theme={theme}
                 compact={isLandscape}
               />
-              {suggestions.map(word => (
-                <TouchableOpacity key={word} onPress={() => applySuggestion(word)} style={styles.suggestionChip}>
-                  <Text style={{color: theme.keyText}} numberOfLines={1}>
-                    {word}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {/* Word chips, then the emoji chip, with a thin divider
+                  between neighbours as in Gboard's strip. */}
+              {[...suggestions.map(word => ({key: word, isEmoji: false})), ...(emojiSuggestion ? [{key: emojiSuggestion, isEmoji: true}] : [])].map(
+                (chip, index) => (
+                  <React.Fragment key={chip.key}>
+                    {index > 0 && <View style={[styles.suggestionDivider, {backgroundColor: theme.keyText + '33'}]} />}
+                    <TouchableOpacity
+                      onPress={() => (chip.isEmoji ? applyEmojiSuggestion(chip.key) : applySuggestion(chip.key))}
+                      style={styles.suggestionChip}>
+                      <Text style={{color: theme.keyText, fontSize: chip.isEmoji ? 20 : 14}} numberOfLines={1}>
+                        {chip.key}
+                      </Text>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ),
+              )}
             </>
           ) : (
             <>
@@ -425,6 +447,10 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
+  },
+  suggestionDivider: {
+    width: 1,
+    height: 20,
   },
   suggestionChip: {
     flex: 1,

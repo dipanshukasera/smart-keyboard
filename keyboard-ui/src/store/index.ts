@@ -3,6 +3,7 @@ import type {KeyboardTheme} from '../themes/themeTypes';
 import {defaultTheme} from '../themes/default';
 import {ThemeStorage} from '../native-bridge/ThemeStorage';
 import {getSuggestions, getSpellingCorrection} from '../services/dictionary';
+import {getEmojiSuggestion} from '../data/emojiKeywords';
 import type {LayoutStyle} from '../layouts/layoutStyles';
 
 export type PanelType =
@@ -102,6 +103,9 @@ interface KeyboardState {
   // does, instead of suggestions only ever appearing in their own row.
   typedWord: string;
   suggestions: string[];
+  // An emoji matching the word being typed ("love" -> ❤️), shown as its own
+  // chip after the word suggestions - see data/emojiKeywords.ts.
+  emojiSuggestion: string | null;
   isToolbarExpanded: boolean;
   // Words the user has actually typed, folded into suggestions alongside
   // the fixed dictionary - Gboard calls this its "personal dictionary".
@@ -218,6 +222,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   translateTargetLocale: null,
   typedWord: '',
   suggestions: [],
+  emojiSuggestion: null,
   isToolbarExpanded: false,
   learnedWords: [],
   learnFromTyping: true,
@@ -330,6 +335,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     set({
       typedWord: word,
       suggestions,
+      emojiSuggestion: getEmojiSuggestion(word),
       // Each new word starts collapsed (suggestions shown, icons hidden)
       // again even if the user expanded the icon row for the last word -
       // only force this on a *cleared* word so mid-word expansion isn't
