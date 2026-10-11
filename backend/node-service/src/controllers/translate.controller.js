@@ -1,4 +1,5 @@
 const axios = require('axios');
+const {transliterate, TransliterationInputError} = require('../services/transliteration');
 
 // DeepL's Free and Pro tiers are separate hosts - free-tier keys always
 // end in ":fx", which is the documented way to tell them apart without a
@@ -70,4 +71,22 @@ async function getLanguages(req, res) {
   }
 }
 
-module.exports = {translate, getLanguages};
+// GET /api/translate/transliterate?text=namaste&lang=hi -> Devanagari
+// candidates for one word typed in English letters (Hinglish), shown as
+// suggestion chips on the keyboard.
+async function transliterateHandler(req, res) {
+  const {text, lang = 'hi'} = req.query;
+  try {
+    const suggestions = await transliterate(text, {lang});
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.json({text: String(text).toLowerCase(), lang, suggestions});
+  } catch (error) {
+    if (error instanceof TransliterationInputError) {
+      return res.status(400).json({error: error.message});
+    }
+    console.warn(`Transliteration failed for "${text}": ${error.message}`);
+    res.status(502).json({error: 'Transliteration service unavailable'});
+  }
+}
+
+module.exports = {translate, getLanguages, transliterateHandler};
