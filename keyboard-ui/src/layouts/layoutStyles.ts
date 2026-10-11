@@ -5,7 +5,7 @@ import type {LayoutDef, KeyDef} from './types';
  * for the same (Latin) alphabet, independent of spoken language - unlike
  * activeLocale (which swaps dictionaries, punctuation, and non-Latin
  * scripts like Devanagari), a layout style only remaps which letter sits
- * where. Only meaningful for en-US today; see KeyboardLayout's usage.
+ * where. Only meaningful for en-GB today; see KeyboardLayout's usage.
  */
 export type LayoutStyle = 'qwerty' | 'azerty' | 'qwertz' | 'dvorak' | 'colemak';
 
@@ -54,7 +54,7 @@ const LAYOUT_STYLE_LETTERS: Record<LayoutStyle, [string[], string[], string[]]> 
 export const LAYOUT_STYLES: LayoutStyle[] = ['qwerty', 'azerty', 'qwertz', 'dvorak', 'colemak'];
 
 // Rebuilds only the 3 letter rows of `base` (assumed to be the plain
-// en-US QWERTY layout) using `style`'s arrangement; the bottom
+// en-GB QWERTY layout) using `style`'s arrangement; the bottom
 // punctuation/space/enter row is copied through untouched, since none of
 // these styles change it.
 export function buildStyledLayout(style: LayoutStyle, base: LayoutDef): LayoutDef {

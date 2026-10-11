@@ -24,12 +24,12 @@ import {useKeyPreview} from '../hooks/useKeyPreview';
 // existing per-key long-press hint), which stays available regardless.
 const NUMBER_ROW_DIGITS = '1234567890'.split('');
 
-import enUS from '../layouts/en-US.json';
+import enGB from '../layouts/en-GB.json';
 import hiIN from '../layouts/hi-IN.json';
 import esES from '../layouts/es-ES.json';
 
 const LAYOUTS: Record<string, LayoutDef> = {
-  'en-US': enUS as LayoutDef,
+  'en-GB': enGB as LayoutDef,
   'hi-IN': hiIN as LayoutDef,
   'es-ES': esES as LayoutDef,
 };
@@ -230,10 +230,10 @@ export function KeyboardLayout({
     return () => subscription.remove();
   }, [onCommitText, setShiftActive]);
 
-  const localeLayout = LAYOUTS[activeLocale] ?? LAYOUTS['en-US'];
+  const localeLayout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
   // Layout style (QWERTY/AZERTY/QWERTZ/Dvorak/Colemak) only makes sense for
   // English today - it's a Latin letter-arrangement choice, not a language.
-  const layout = activeLocale === 'en-US' ? buildStyledLayout(layoutStyle, localeLayout) : localeLayout;
+  const layout = activeLocale === 'en-GB' ? buildStyledLayout(layoutStyle, localeLayout) : localeLayout;
 
   // See styles.pressOverlay - a translucent wash that reads as "pressed"
   // regardless of which theme's specific key/pressed-background pair is

@@ -48,7 +48,7 @@ public class ThemeStorageModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void loadActiveLocale(Promise promise) {
-        promise.resolve(prefs().getString(KEY_ACTIVE_LOCALE, "en-US"));
+        promise.resolve(prefs().getString(KEY_ACTIVE_LOCALE, "en-GB"));
     }
 
     // Generic string storage (JSON-serialize on the JS side) so each new

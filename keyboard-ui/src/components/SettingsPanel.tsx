@@ -104,6 +104,8 @@ export function SettingsPanel() {
     setActivePanel,
     numberRowEnabled,
     setNumberRowEnabled,
+    hinglishEnabled,
+    setHinglishEnabled,
     hapticFeedbackEnabled,
     setHapticFeedbackEnabled,
     keySoundEnabled,
@@ -144,6 +146,14 @@ export function SettingsPanel() {
           accent={theme.accent}
         />
         <ToggleRow
+          label="Hindi suggestions (Hinglish)"
+          value={hinglishEnabled}
+          onChange={setHinglishEnabled}
+          note="Type Hindi in English letters - e.g. namaste - and get नमस्ते as a suggestion. The word you're typing is sent to our server to convert it; never in password fields or incognito mode."
+          textColor={theme.keyText}
+          accent={theme.accent}
+        />
+        <ToggleRow
           label="Haptic feedback"
           value={hapticFeedbackEnabled}
           onChange={setHapticFeedbackEnabled}
@@ -174,7 +184,7 @@ export function SettingsPanel() {
 
         {sectionLabel('KEYBOARD LAYOUT')}
         <OptionPills options={LAYOUT_OPTIONS} value={layoutStyle} onChange={setLayoutStyle} {...pillColors} />
-        <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Applies to English (US)</Text>
+        <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Applies to English (UK)</Text>
 
         {sectionLabel('KEYBOARD SIZE')}
         <OptionPills options={SIZE_OPTIONS} value={keyboardSizeScale} onChange={setKeyboardSizeScale} {...pillColors} />

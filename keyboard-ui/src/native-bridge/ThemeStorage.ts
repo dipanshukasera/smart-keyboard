@@ -33,7 +33,7 @@ export const ThemeStorage = {
   },
 
   async loadActiveLocale(): Promise<string> {
-    if (!native) return 'en-US';
+    if (!native) return 'en-GB';
     return native.loadActiveLocale();
   },
 

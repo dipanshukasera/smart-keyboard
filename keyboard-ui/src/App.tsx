@@ -28,6 +28,7 @@ import {SettingsPanel} from './components/SettingsPanel';
 import {ToolbarOrderPanel} from './components/ToolbarOrderPanel';
 import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
+import {useHindiSuggestion} from './hooks/useHindiSuggestion';
 
 const {ClipboardModule, KeyboardSizeModule} = NativeModules;
 
@@ -59,6 +60,7 @@ export default function App() {
   // keyboard (rendered by renderPanel, below the toolbar) share one copy
   // of the same state instead of each needing their own.
   const translation = useTranslationPanel();
+  const hindi = useHindiSuggestion();
   // See KeyboardLayout.tsx's verticalScale comment - the toolbar's own
   // fixed vertical padding contributes to the same landscape overflow, so
   // it needs to shrink there too.
@@ -197,7 +199,21 @@ export default function App() {
   // and the rest of the row shows suggestion chips instead - previously
   // the icons and suggestions occupied separate rows at the same time.
   const showSuggestionStrip =
-    activePanel === 'keyboard' && !isToolbarExpanded && (suggestions.length > 0 || !!emojiSuggestion);
+    activePanel === 'keyboard' &&
+    !isToolbarExpanded &&
+    (suggestions.length > 0 || !!emojiSuggestion || !!hindi.suggestion);
+
+  // Strip order: English words, then the Hindi (Devanagari) form of the
+  // word, then the emoji. While Hinglish is in play the English words drop
+  // to two, so all of it fits on one row.
+  type Chip = {key: string; kind: 'word' | 'hindi' | 'emoji'; disabled?: boolean};
+  const suggestionChips: Chip[] = [
+    ...(hindi.active ? suggestions.slice(0, 2) : suggestions).map(word => ({key: word, kind: 'word' as const})),
+    ...(hindi.suggestion
+      ? [{key: hindi.suggestion.text, kind: 'hindi' as const, disabled: !hindi.suggestion.fresh}]
+      : []),
+    ...(emojiSuggestion ? [{key: emojiSuggestion, kind: 'emoji' as const}] : []),
+  ];
 
   // The tool icons show on the letter keyboard and on ?123, which share a
   // toolbar like Gboard's (so switching between them doesn't resize the
@@ -222,22 +238,22 @@ export default function App() {
                 theme={theme}
                 compact={isLandscape}
               />
-              {/* Word chips, then the emoji chip, with a thin divider
-                  between neighbours as in Gboard's strip. */}
-              {[...suggestions.map(word => ({key: word, isEmoji: false})), ...(emojiSuggestion ? [{key: emojiSuggestion, isEmoji: true}] : [])].map(
-                (chip, index) => (
-                  <React.Fragment key={chip.key}>
-                    {index > 0 && <View style={[styles.suggestionDivider, {backgroundColor: theme.keyText + '33'}]} />}
-                    <TouchableOpacity
-                      onPress={() => (chip.isEmoji ? applyEmojiSuggestion(chip.key) : applySuggestion(chip.key))}
-                      style={styles.suggestionChip}>
-                      <Text style={{color: theme.keyText, fontSize: chip.isEmoji ? 20 : 14}} numberOfLines={1}>
-                        {chip.key}
-                      </Text>
-                    </TouchableOpacity>
-                  </React.Fragment>
-                ),
-              )}
+              {/* A thin divider between neighbouring chips, as in Gboard's
+                  strip. A Hindi chip replaces the typed word, like a word
+                  suggestion; an emoji chip is added after it. */}
+              {suggestionChips.map((chip, index) => (
+                <React.Fragment key={`${chip.kind}:${chip.key}`}>
+                  {index > 0 && <View style={[styles.suggestionDivider, {backgroundColor: theme.keyText + '33'}]} />}
+                  <TouchableOpacity
+                    disabled={chip.disabled}
+                    onPress={() => (chip.kind === 'emoji' ? applyEmojiSuggestion(chip.key) : applySuggestion(chip.key))}
+                    style={[styles.suggestionChip, chip.disabled && styles.suggestionChipPending]}>
+                    <Text style={{color: theme.keyText, fontSize: chip.kind === 'emoji' ? 20 : chip.kind === 'hindi' ? 16 : 14}} numberOfLines={1}>
+                      {chip.key}
+                    </Text>
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
             </>
           ) : (
             <>
@@ -447,6 +463,9 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
+  },
+  suggestionChipPending: {
+    opacity: 0.4,
   },
   suggestionDivider: {
     width: 1,

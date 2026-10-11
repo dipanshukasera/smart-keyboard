@@ -14,12 +14,12 @@
  * is building a {word -> rank} Map once, cached in RANK_CACHE.
  */
 
-import enUS from '../data/frequency-en-US.json';
+import enGB from '../data/frequency-en-GB.json';
 import esES from '../data/frequency-es-ES.json';
 import hiIN from '../data/frequency-hi-IN.json';
 
 const FREQUENCY_LISTS: Record<string, string[]> = {
-  'en-US': enUS as string[],
+  'en-GB': enGB as string[],
   'es-ES': esES as string[],
   'hi-IN': hiIN as string[],
 };
@@ -32,7 +32,7 @@ const RANK_CACHE = new Map<string, Map<string, number>>();
 function ranksFor(locale: string): Map<string, number> {
   let cached = RANK_CACHE.get(locale);
   if (!cached) {
-    const list = FREQUENCY_LISTS[locale] ?? FREQUENCY_LISTS['en-US'];
+    const list = FREQUENCY_LISTS[locale] ?? FREQUENCY_LISTS['en-GB'];
     cached = new Map(list.map((word, index) => [word, index]));
     RANK_CACHE.set(locale, cached);
   }
@@ -41,7 +41,7 @@ function ranksFor(locale: string): Map<string, number> {
 
 export function getSuggestions(locale: string, prefix: string, limit: number = 3): string[] {
   if (!prefix) return [];
-  const words = FREQUENCY_LISTS[locale] ?? FREQUENCY_LISTS['en-US'];
+  const words = FREQUENCY_LISTS[locale] ?? FREQUENCY_LISTS['en-GB'];
   const lowerPrefix = prefix.toLowerCase();
   const matches: string[] = [];
   for (const word of words) {
@@ -56,7 +56,7 @@ export function getSuggestions(locale: string, prefix: string, limit: number = 3
 // Letters edits1() substitutes/inserts when hunting for a real word one
 // typo away - Hindi is deliberately excluded (see below).
 const ALPHABETS: Record<string, string> = {
-  'en-US': 'abcdefghijklmnopqrstuvwxyz',
+  'en-GB': 'abcdefghijklmnopqrstuvwxyz',
   'es-ES': 'abcdefghijklmnopqrstuvwxyzñáéíóúü',
 };
 
