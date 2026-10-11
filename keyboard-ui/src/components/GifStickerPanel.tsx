@@ -268,6 +268,12 @@ export function GifStickerPanel() {
   const runSearch = async (text: string, page = 1) => {
     if (page === 1) {
       setLoading(true);
+      // Put the keys away as soon as a search starts, so the skeleton grid
+      // shows while it loads. The grid is hidden while the keys are up, so
+      // searching from the keyboard's search key used to leave the keys on
+      // screen with no sign anything was happening until results arrived -
+      // on a slow response it looked frozen.
+      setIsTyping(false);
     } else {
       setLoadingMore(true);
     }
@@ -281,12 +287,6 @@ export function GifStickerPanel() {
       pageRef.current = page;
       if (page === 1) {
         setResults(batch);
-        if (batch.length > 0) {
-          // Once there's something to look at, get the keys out of the way so
-          // the grid has the room - matches Gboard: the keyboard only comes
-          // back if the user taps the search box again to refine the query.
-          setIsTyping(false);
-        }
       } else {
         // Guard against the same id arriving twice - providers paginate
         // independently, and a duplicate key would break FlatList.
@@ -300,11 +300,6 @@ export function GifStickerPanel() {
       // failed first page should empty the grid.
       if (page === 1) {
         setResults([]);
-        // The status area (and so the error) is hidden while the keys are
-        // up, so a failed search launched from typing mode would show
-        // nothing at all - the tap just looked ignored. Collapsing the
-        // keys is what makes the message visible.
-        setIsTyping(false);
       }
       setHasMore(false);
       setError(describeRequestFailure(err, typeLabel));
@@ -684,8 +679,10 @@ export function GifStickerPanel() {
         // A grid of placeholder tiles the same shape as the real results,
         // rather than a lone spinner - the panel keeps its size, and the
         // results visibly fill in where the skeleton was.
-        <View style={[styles.grid, {maxHeight: gridMaxHeight}]}>
-          {[0, 1, 2].map(row => (
+        // Same height as the results grid it stands in for (4 rows, clipped),
+        // so the panel doesn't grow when the real results replace it.
+        <View style={[styles.grid, styles.skeletonGrid, {height: gridMaxHeight}]}>
+          {[0, 1, 2, 3].map(row => (
             <View key={row} style={styles.skeletonRow}>
               {[0, 1, 2].map(col => (
                 <Animated.View
@@ -745,7 +742,9 @@ export function GifStickerPanel() {
           showSuggestions={false}
           onCommitText={appendToQuery}
           onDeleteBackward={deleteFromQuery}
-          onEnter={() => runSearch(query)}
+          onEnter={() => {
+            if (query.trim()) runSearch(query);
+          }}
         />
       ) : (
         <ExpressionModeBar active="gif" onDelete={() => deleteFromQuery(1)} />
@@ -850,6 +849,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     textAlign: 'center',
+  },
+  skeletonGrid: {
+    overflow: 'hidden',
   },
   skeletonRow: {
     flexDirection: 'row',
