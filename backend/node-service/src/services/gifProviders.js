@@ -193,10 +193,11 @@ function mapRedgifsItem(item) {
   return {id: String(item.id), previewUrl: preview, fullUrl: full, videoUrl: video ?? null};
 }
 
-async function searchRedgifsByTags(tags, limit, page) {
+// `params` is the Redgifs filter: {tags} for a search, {order} for a feed.
+async function queryRedgifs(params, limit, page) {
   const request = async token =>
     axios.get(`${REDGIFS_API}/gifs/search`, {
-      params: {tags, count: Math.min(limit, 80), page},
+      params: {...params, count: Math.min(limit, 80), page},
       headers: {Authorization: `Bearer ${token}`, 'User-Agent': REDGIFS_USER_AGENT},
     });
 
@@ -238,7 +239,7 @@ async function searchAdultGifsProvider(query, limit, page = 1) {
   const cleaned = query.trim().replace(/\s+/g, ' ');
   if (!cleaned) return [];
 
-  const exact = await searchRedgifsByTags(cleaned, limit, page);
+  const exact = await queryRedgifs({tags: cleaned}, limit, page);
   if (exact.length > 0) return exact;
 
   const words = [...new Set(cleaned.toLowerCase().split(' '))]
@@ -247,7 +248,7 @@ async function searchAdultGifsProvider(query, limit, page = 1) {
   if (words.length < 2) return exact;
 
   const perWordLimit = Math.max(8, Math.ceil(limit / words.length));
-  const settled = await Promise.allSettled(words.map(word => searchRedgifsByTags(word, perWordLimit, page)));
+  const settled = await Promise.allSettled(words.map(word => queryRedgifs({tags: word}, perWordLimit, page)));
   const groups = settled.filter(outcome => outcome.status === 'fulfilled').map(outcome => outcome.value);
   if (groups.length === 0) {
     // Every per-word request failed outright (not just empty) - surface
@@ -261,6 +262,15 @@ async function searchAdultGifsProvider(query, limit, page = 1) {
   return interleave(groups)
     .filter(item => !seen.has(item.id) && seen.add(item.id))
     .slice(0, limit);
+}
+
+// What the 18+ tab shows before anything is searched, so it doesn't open
+// empty. "top7" (most popular this week) rather than "trending": trending
+// returned short, uneven pages (7 or 5 items when asked for 10), top7 a
+// full page every time. Same gating as search - only reachable through
+// getTrendingAdultGifs, behind ENABLE_ADULT_GIFS and the user's opt-in.
+async function trendingAdultGifsProvider(limit) {
+  return queryRedgifs({order: 'top7'}, limit, 1);
 }
 
 /**
@@ -308,6 +318,10 @@ const PROVIDERS = {
 // keyboard setting.
 const ADULT_PROVIDERS = {
   adult: searchAdultGifsProvider,
+};
+
+const ADULT_TRENDING_PROVIDERS = {
+  adult: trendingAdultGifsProvider,
 };
 
 const TRENDING_PROVIDERS = {
@@ -444,6 +458,16 @@ async function searchAdultGifs(query, {page = 1} = {}) {
   return queryAllProviders(ADULT_PROVIDERS, [query], PAGE_SIZE, {requireApiKey: false, page});
 }
 
+// The 18+ tab's default grid, shown when that tab is opened - never in
+// the panel's initial view, which always opens on the GIFs tab. Same
+// opt-in gate as searchAdultGifs.
+async function getTrendingAdultGifs(limit = 24) {
+  if (!adultGifsEnabled()) {
+    throw new AdultContentDisabledError();
+  }
+  return queryAllProviders(ADULT_TRENDING_PROVIDERS, [], limit, {requireApiKey: false});
+}
+
 // Shown in GifStickerPanel the moment it opens, before the user has typed
 // anything - matches Gboard, which never shows an empty GIF panel.
 async function getTrendingGifs(limit = 24) {
@@ -465,6 +489,7 @@ module.exports = {
   searchStickers,
   getTrendingStickers,
   searchAdultGifs,
+  getTrendingAdultGifs,
   adultGifsEnabled,
   getConfiguredProviderNames,
   ProviderNotConfiguredError,

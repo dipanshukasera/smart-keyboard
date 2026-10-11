@@ -4,6 +4,7 @@ const {
   searchStickers: searchAllStickerProviders,
   getTrendingStickers,
   searchAdultGifs,
+  getTrendingAdultGifs,
   adultGifsEnabled,
   PAGE_SIZE,
   ProviderNotConfiguredError,
@@ -108,6 +109,18 @@ async function searchAdultGifsHandler(req, res) {
   }
 }
 
+async function trendingAdultGifsHandler(req, res) {
+  try {
+    const {results, providers} = await getTrendingAdultGifs(24);
+    res.json({providers, results});
+  } catch (error) {
+    if (error instanceof AdultContentDisabledError) {
+      return res.status(403).json({error: error.message});
+    }
+    res.status(502).json({error: error.message || 'Failed to reach the adult GIF provider'});
+  }
+}
+
 // Converts one 18+ result's mp4 into a .gif, for chat fields that take
 // images but not video (see gifConverter.js). Same server opt-in as the
 // search itself - it only ever converts Redgifs media.
@@ -140,5 +153,6 @@ module.exports = {
   searchStickers,
   trendingStickers,
   searchAdultGifsHandler,
+  trendingAdultGifsHandler,
   convertAdultGifHandler,
 };

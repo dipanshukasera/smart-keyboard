@@ -178,13 +178,13 @@ export function GifStickerPanel() {
     };
   }, []);
 
-  const ENDPOINTS: Record<ContentType, {trending: string | null; search: string; label: string}> = {
+  const ENDPOINTS: Record<ContentType, {trending: string; search: string; label: string}> = {
     gif: {trending: '/api/gif/trending', search: '/api/gif/search', label: 'GIFs'},
     sticker: {trending: '/api/gif/stickers/trending', search: '/api/gif/stickers/search', label: 'stickers'},
-    // No trending for 18+ on purpose: trending is what fills the panel
-    // before anyone types, and that has to stay safe. This tab starts
-    // empty and only shows what was explicitly searched for.
-    adult: {trending: null, search: '/api/gif/adult/search', label: '18+ GIFs'},
+    // The panel itself always opens on GIFs, so the first thing anyone
+    // sees stays safe; this feed only loads once the (opt-in) 18+ tab is
+    // tapped, so the tab opens on popular clips rather than empty.
+    adult: {trending: '/api/gif/adult/trending', search: '/api/gif/adult/search', label: '18+ GIFs'},
   };
   const trendingEndpoint = ENDPOINTS[contentType].trending;
   const searchEndpoint = ENDPOINTS[contentType].search;
@@ -210,14 +210,6 @@ export function GifStickerPanel() {
     if (!queryIsEmpty) return;
     setHasMore(false);
     pageRef.current = 1;
-    // Tabs with no trending feed (18+) open empty and wait for a query
-    // rather than auto-loading anything.
-    if (!trendingEndpoint) {
-      setResults([]);
-      setError(null);
-      setLoading(false);
-      return;
-    }
     (async () => {
       setResults([]);
       setLoading(true);
