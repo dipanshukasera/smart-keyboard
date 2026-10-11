@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import Video from 'react-native-video';
 import {useKeyboardStore} from '../store';
 import {API_BASE_URL, apiClient} from '../services/api';
 import {KeyboardLayout} from './KeyboardLayout';
@@ -119,6 +120,10 @@ export function GifStickerPanel() {
   // Which tag chip is active: a default tag (then `query` holds it too),
   // RECENT_TAG, or null.
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  // The 18+ clip being previewed before sending (see renderVideoPreview).
+  const [previewItem, setPreviewItem] = useState<GifResult | null>(null);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const {height: windowHeight} = useWindowDimensions();
   const gridMaxHeight = Math.max(MIN_GRID_HEIGHT_DP, windowHeight * WINDOW_HEIGHT_FRACTION - PANEL_CHROME_DP);
   const [results, setResults] = useState<GifResult[]>([]);
@@ -232,6 +237,12 @@ export function GifStickerPanel() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryIsEmpty, contentType]);
+
+  // A preview belongs to the grid it was opened from - switching tabs,
+  // searching, tapping a tag or bringing the keys up all leave it.
+  useEffect(() => {
+    setPreviewItem(null);
+  }, [contentType, query, selectedTag, isTyping]);
 
   // Editing the query by hand means it's no longer the tag that was
   // tapped; typing anything while Recent is open switches to searching.
@@ -386,6 +397,27 @@ export function GifStickerPanel() {
     runSearch(tag);
   };
 
+  // 18+ results are video, and the grid only shows their still frame (see
+  // the play badge below) - so tapping one previews it first, and sending
+  // is a second, deliberate tap. GIFs and stickers already animate in the
+  // grid, so they still send on a single tap.
+  const onResultPress = (item: GifResult) => {
+    if (item.videoUrl) {
+      setPreviewReady(false);
+      setPreviewFailed(false);
+      setPreviewItem(item);
+    } else {
+      selectGif(item);
+    }
+  };
+
+  const sendPreview = () => {
+    if (!previewItem) return;
+    const item = previewItem;
+    setPreviewItem(null);
+    selectGif(item);
+  };
+
   // Recents are kept per tab: 18+ results' ids carry the "adult:" prefix
   // their provider gives them (see queryAllProviders), so 18+ clips only
   // ever show under the 18+ tab's Recent, never under GIFs or Stickers.
@@ -414,11 +446,6 @@ export function GifStickerPanel() {
       if (await GifCommit.commitGif(gif.videoUrl)) {
         sentUrl = gif.videoUrl;
       } else if (await GifCommit.isRichContentSupported()) {
-        // Conversion takes several seconds (see gifConverter.js), so say
-        // something is happening rather than looking like a dead tap.
-        // Only shown when the field takes GIFs - otherwise commitGif
-        // declines before requesting a conversion at all.
-        showFeedback('Making GIF…');
         const gifUrl = convertedGifUrl(gif.videoUrl);
         if (await GifCommit.commitGif(gifUrl)) {
           sentUrl = gifUrl;
@@ -593,7 +620,45 @@ export function GifStickerPanel() {
         screen). Rendering both at once was exactly what clipped the
         bottom rows of the keyboard off-screen.
       */}
-      {isTyping ? null : selectedTag === RECENT_TAG ? (
+      {isTyping ? null : previewItem?.videoUrl ? (
+        // One player at a time, only while previewing: autoplaying every
+        // tile spun up a hardware decoder per result and locked the
+        // keyboard up (see the play badge comment below).
+        <View style={[styles.preview, {height: gridMaxHeight}]}>
+          <Image source={{uri: previewItem.previewUrl}} style={styles.previewMedia} resizeMode="contain" />
+          {!previewFailed && (
+            <Video
+              source={{uri: previewItem.videoUrl}}
+              style={[styles.previewMedia, !previewReady && styles.hidden]}
+              resizeMode="contain"
+              repeat
+              muted
+              // Muted, but the player still requested audio focus by
+              // default - which paused whatever music the user had playing
+              // the moment a preview opened.
+              disableFocus
+              onReadyForDisplay={() => setPreviewReady(true)}
+              onError={() => setPreviewFailed(true)}
+            />
+          )}
+          {!previewReady && !previewFailed && (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.previewLoading, {backgroundColor: skeletonColor, opacity: skeletonPulse}]}
+            />
+          )}
+          {previewFailed && (
+            <Text style={[styles.previewNote, {color: '#FFFFFF'}]}>Couldn't play this clip - you can still send it</Text>
+          )}
+          <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewItem(null)}>
+            <Icon name="close" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.previewSend, {backgroundColor: theme.accent}]} onPress={sendPreview}>
+            <Icon name="send" size={16} color="#FFFFFF" />
+            <Text style={styles.previewSendText}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      ) : selectedTag === RECENT_TAG ? (
         tabRecents.length === 0 ? (
           <Text style={[styles.statusMessage, {color: theme.keyText + '99'}]}>
             Nothing sent from this tab yet. {typeLabel[0].toUpperCase() + typeLabel.slice(1)} you send show up here,
@@ -656,13 +721,14 @@ export function GifStickerPanel() {
             // effectively never seen. Paging is the button's job now.
             ListFooterComponent={renderGridFooter()}
             renderItem={({item}) => (
-              <TouchableOpacity style={styles.cell} onPress={() => selectGif(item)}>
+              <TouchableOpacity style={styles.cell} onPress={() => onResultPress(item)}>
                 <GifThumb uri={item.previewUrl} pulse={skeletonPulse} skeletonColor={skeletonColor} />
                 {/* Video results (18+) render as their still frame with a
                     play badge rather than autoplaying. A grid of ~78 live
                     players spun up ~78 hardware decoders at once, which
                     locked the keyboard up; the badge is what tells the
-                    user the tile is a video rather than a still. */}
+                    user the tile is a video, and tapping it plays it in
+                    the preview (one player at a time). */}
                 {!!item.videoUrl && (
                   <View style={styles.playBadge} pointerEvents="none">
                     <Icon name="play-circle-filled" size={22} color="#FFFFFF" />
@@ -858,6 +924,66 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 4,
+  },
+  preview: {
+    margin: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewMedia: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  hidden: {
+    opacity: 0,
+  },
+  previewLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  previewNote: {
+    position: 'absolute',
+    top: 12,
+    fontSize: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  previewClose: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewSend: {
+    position: 'absolute',
+    bottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 18,
+    gap: 6,
+  },
+  previewSendText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   thumbSkeleton: {
     position: 'absolute',
