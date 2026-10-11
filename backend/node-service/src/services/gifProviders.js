@@ -193,10 +193,10 @@ function mapRedgifsItem(item) {
   return {id: String(item.id), previewUrl: preview, fullUrl: full, videoUrl: video ?? null};
 }
 
-async function searchAdultGifsProvider(query, limit, page = 1) {
+async function searchRedgifsByTags(tags, limit, page) {
   const request = async token =>
     axios.get(`${REDGIFS_API}/gifs/search`, {
-      params: {search_text: query, count: Math.min(limit, 80), page},
+      params: {tags, count: Math.min(limit, 80), page},
       headers: {Authorization: `Bearer ${token}`, 'User-Agent': REDGIFS_USER_AGENT},
     });
 
@@ -206,7 +206,10 @@ async function searchAdultGifsProvider(query, limit, page = 1) {
   } catch (error) {
     // A cached token that expired early (or was invalidated) reads as a
     // 401 - retry once with a fresh one before giving up, so a stale
-    // token doesn't surface to the user as a dead feature.
+    // token doesn't surface to the user as a dead feature. The token is
+    // also bound to the requesting IP (its valid_addr claim), so a host
+    // whose outbound address changes gets a 401 "WrongSender" here too,
+    // which the same refresh fixes.
     if (error.response?.status !== 401) {
       throw error;
     }
@@ -214,6 +217,50 @@ async function searchAdultGifsProvider(query, limit, page = 1) {
   }
 
   return (response.data.gifs || []).map(mapRedgifsItem).filter(Boolean);
+}
+
+// Most words a user would type that a fallback should never search on
+// alone - as single tags they fuzzy-match to arbitrary popular content.
+const TAG_STOPWORDS = new Set(['a', 'an', 'and', 'the', 'of', 'in', 'on', 'with', 'for', 'to', 'my', 'me', 'gif', 'gifs']);
+const MAX_FALLBACK_TAGS = 4;
+
+// Searches by tag, not free text: Redgifs silently ignores search_text and
+// returns the same generic feed for every query, which is why 18+ results
+// never matched what was typed. Its `tags` param does match, and resolves
+// loose input itself ("kiss" -> Kissing, "french kissing" -> French
+// Kissing), treating several words as AND.
+//
+// That AND is also its weakness: one word Redgifs has no tag for empties
+// the whole result set ("kiss xyzzq" -> 0). So if the full query finds
+// nothing, fall back to each meaningful word as its own tag and merge
+// those results - an OR over the words that do match something.
+async function searchAdultGifsProvider(query, limit, page = 1) {
+  const cleaned = query.trim().replace(/\s+/g, ' ');
+  if (!cleaned) return [];
+
+  const exact = await searchRedgifsByTags(cleaned, limit, page);
+  if (exact.length > 0) return exact;
+
+  const words = [...new Set(cleaned.toLowerCase().split(' '))]
+    .filter(word => word.length > 1 && !TAG_STOPWORDS.has(word))
+    .slice(0, MAX_FALLBACK_TAGS);
+  if (words.length < 2) return exact;
+
+  const perWordLimit = Math.max(8, Math.ceil(limit / words.length));
+  const settled = await Promise.allSettled(words.map(word => searchRedgifsByTags(word, perWordLimit, page)));
+  const groups = settled.filter(outcome => outcome.status === 'fulfilled').map(outcome => outcome.value);
+  if (groups.length === 0) {
+    // Every per-word request failed outright (not just empty) - surface
+    // the error rather than reporting "nothing matched".
+    throw settled[0].reason;
+  }
+
+  // The same GIF can be tagged with several of the words - keep its first
+  // appearance so the merged grid has no duplicate tiles.
+  const seen = new Set();
+  return interleave(groups)
+    .filter(item => !seen.has(item.id) && seen.add(item.id))
+    .slice(0, limit);
 }
 
 /**
