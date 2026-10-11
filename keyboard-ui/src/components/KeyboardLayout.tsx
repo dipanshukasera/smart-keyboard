@@ -1,7 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
   DeviceEventEmitter,
-  LayoutChangeEvent,
   PanResponder,
   StyleSheet,
   Text,
@@ -18,6 +17,7 @@ import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
 import type {KeyDef, LayoutDef} from '../layouts/types';
 import {buildStyledLayout} from '../layouts/layoutStyles';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
+import {useKeyPreview} from '../hooks/useKeyPreview';
 
 // A full row of digit keys shown above the top letter row when the
 // "Number row" setting is on - distinct from NUMBER_HINTS below (the
@@ -64,11 +64,6 @@ const PIXELS_PER_CHAR = 18;
 // since a held key's PanResponder move-event stream starves setInterval.
 const HOLD_REPEAT_INITIAL_DELAY_MS = 400;
 const HOLD_REPEAT_INTERVAL_MS = 60;
-// A quick tap's press-in and press-out land within a few dozen ms of each
-// other - often inside the same render - so clearing the highlight
-// immediately on release meant it never actually reached the screen. Keep
-// it up at least this long after release so every tap visibly registers.
-const PRESS_HIGHLIGHT_MIN_MS = 90;
 export const PILL_BACKGROUND = '#5F6368';
 export const PILL_TEXT = '#FFFFFF';
 
@@ -169,54 +164,10 @@ export function KeyboardLayout({
   // moved (spacebar) - 0 means no drag gesture in progress.
   const [dragDeleteCount, setDragDeleteCount] = useState(0);
   // Which key (by "row-col" id) is currently pressed, for a visible
-  // highlight while held - previously only shift/delete ever changed
-  // background on press, every other key gave no feedback at all.
-  const [pressedKeyId, setPressedKeyId] = useState<string | null>(null);
-  // See PRESS_HIGHLIGHT_MIN_MS - press sets the highlight immediately,
-  // release clears it after a short hold rather than instantly. A new press
-  // cancels any pending clear, so fast typing hands the highlight straight
-  // from one key to the next.
-  const pressReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Gboard-style key preview: an enlarged bubble above the pressed key
-  // showing its character (or the number, once a top-row key's long-press
-  // fires). The label is captured at press time - typing a letter can
-  // turn shift off in the same tap, which would otherwise flip the bubble
-  // to lowercase while the finger is still down.
-  const [previewLabel, setPreviewLabel] = useState<string | null>(null);
-  // Where each previewable key sits, so the bubble can be drawn once at
-  // the keyboard level instead of inside the key. Inside the key it got
-  // clipped to the key's own bounds - the long-press number popup on the
-  // top row showed as nothing more than a sliver along the key's edge.
-  const rowTopRef = useRef<Record<string, number>>({});
-  const keyRectRef = useRef<Record<string, {row: string; x: number; width: number; height: number}>>({});
-  const [bodyWidth, setBodyWidth] = useState(0);
-  const pressKey = (id: string, label: string | null = null) => {
-    if (pressReleaseTimerRef.current) clearTimeout(pressReleaseTimerRef.current);
-    pressReleaseTimerRef.current = null;
-    setPressedKeyId(id);
-    setPreviewLabel(label);
-  };
-  const releaseKey = () => {
-    if (pressReleaseTimerRef.current) clearTimeout(pressReleaseTimerRef.current);
-    pressReleaseTimerRef.current = setTimeout(() => {
-      pressReleaseTimerRef.current = null;
-      setPressedKeyId(null);
-      setPreviewLabel(null);
-    }, PRESS_HIGHLIGHT_MIN_MS);
-  };
-  useEffect(
-    () => () => {
-      if (pressReleaseTimerRef.current) clearTimeout(pressReleaseTimerRef.current);
-    },
-    [],
-  );
-  const trackRowLayout = (row: string) => (e: LayoutChangeEvent) => {
-    rowTopRef.current[row] = e.nativeEvent.layout.y;
-  };
-  const trackKeyLayout = (keyId: string, row: string) => (e: LayoutChangeEvent) => {
-    const {x, width, height} = e.nativeEvent.layout;
-    keyRectRef.current[keyId] = {row, x, width, height};
-  };
+  // highlight while held, plus the Gboard-style preview bubble above it -
+  // see useKeyPreview (shared with SymbolsNumberPanel).
+  const {pressedKeyId, setPressedKeyId, pressKey, releaseKey, onBodyLayout, trackRowLayout, trackKeyLayout, renderPreview} =
+    useKeyPreview();
   // Which top-row key index is currently showing its number in an enlarged
   // popup above the key - Gboard shows this the moment the long-press
   // fires (not just silently swapping in the character), so holding
@@ -615,51 +566,17 @@ export function KeyboardLayout({
 
   // While a top-row key's long-press is firing, the bubble shows its
   // number rather than the letter.
-  const previewKeyId = numberPreviewIndex != null ? `0-${numberPreviewIndex}` : previewLabel ? pressedKeyId : null;
-  const previewText = numberPreviewIndex != null ? NUMBER_HINTS[numberPreviewIndex] : previewLabel;
-  const previewRect = previewKeyId ? keyRectRef.current[previewKeyId] : undefined;
-  const previewRowTop = previewRect ? rowTopRef.current[previewRect.row] : undefined;
-  let keyPreview: React.ReactNode = null;
-  if (previewRect && previewRowTop != null && previewText) {
-    const bubbleWidth = Math.max(previewRect.width * 1.35, 44 * keyboardSizeScale);
-    const bubbleHeight = previewRect.height * 1.3;
-    const centredLeft = previewRect.x + previewRect.width / 2 - bubbleWidth / 2;
-    // Kept inside the keyboard horizontally so edge keys (q, p) don't push
-    // half the bubble off-screen.
-    const left = Math.min(Math.max(centredLeft, 2), Math.max(2, bodyWidth - bubbleWidth - 2));
-    keyPreview = (
-      <View
-        pointerEvents="none"
-        style={[
-          styles.keyPreview,
-          {
-            left,
-            // Sits just above the key, overlapping its top edge slightly so
-            // it reads as coming out of that key - for the top row this
-            // reaches up over the toolbar, as Gboard's does.
-            top: previewRowTop - bubbleHeight + previewRect.height * 0.2,
-            width: bubbleWidth,
-            height: bubbleHeight,
-            backgroundColor: theme.keyBackground,
-            borderColor: numberPreviewIndex != null ? theme.accent : theme.keyText + '22',
-          },
-        ]}>
-        <Text
-          style={{
-            color: theme.keyText,
-            fontSize: 28 * keyboardSizeScale,
-            fontWeight: '500',
-            fontFamily: keyFontFamily ?? undefined,
-          }}>
-          {previewText}
-        </Text>
-      </View>
-    );
-  }
+  const keyPreview = renderPreview({
+    theme,
+    scale: keyboardSizeScale,
+    fontFamily: keyFontFamily,
+    override:
+      numberPreviewIndex != null ? {keyId: `0-${numberPreviewIndex}`, label: NUMBER_HINTS[numberPreviewIndex]} : null,
+  });
 
   const keyboardBody = (
     <View
-      onLayout={e => setBodyWidth(e.nativeEvent.layout.width)}
+      onLayout={onBodyLayout}
       style={[
         styles.container,
         {backgroundColor: theme.panelBackground, paddingVertical: 4 * verticalScale},
@@ -966,15 +883,6 @@ const styles = StyleSheet.create({
     right: 6,
     fontSize: 10,
     opacity: 0.6,
-  },
-  keyPreview: {
-    position: 'absolute',
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    zIndex: 20,
   },
   oneHandedFlex: {
     flex: 4,
