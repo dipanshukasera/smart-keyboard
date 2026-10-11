@@ -7,7 +7,9 @@ import {
   NativeModules,
   StyleSheet,
   Text,
+  ScrollView,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -66,6 +68,28 @@ function describeRequestFailure(err: any, typeLabel: string): string {
   return `Couldn't reach ${typeLabel} search - check your connection`;
 }
 
+// Quick-search chips shown after the GIFs/Stickers/18+ tabs. Tapping one
+// runs it as a search in the current tab. 18+ gets its own set: Redgifs
+// searches by tag (see gifProviders.js), so these are tags it recognises.
+const DEFAULT_TAGS: Record<ContentType, string[]> = {
+  gif: ['Happy', 'Love', 'LOL', 'Sad', 'Thank you', 'Wow', 'Yes', 'No', 'Hello', 'Party', 'Dance', 'Good night'],
+  sticker: ['Happy', 'Love', 'LOL', 'Sad', 'Thank you', 'Wow', 'Yes', 'No', 'Hello', 'Party', 'Cute', 'Good night'],
+  adult: ['Kissing', 'Teasing', 'Couple', 'Boobs', 'Ass', 'Lesbian', 'Amateur', 'Cosplay'],
+};
+
+// The first chip in the tag row: shows what was sent from this tab before
+// (cached, so it works offline) instead of search results.
+const RECENT_TAG = '__recent__';
+
+// The keyboard window is capped at 55% of the screen height (KeyboardReactView's
+// MAX_HEIGHT_FRACTION). Anything below the grid that doesn't fit under that
+// cap is clipped - which is how the ABC/emoji/GIF/delete bar ended up cut
+// off. So the grid gets whatever the cap leaves after the panel's other
+// rows (search box, tab/tag row, section label, mode bar, padding).
+const WINDOW_HEIGHT_FRACTION = 0.55;
+const PANEL_CHROME_DP = 170;
+const MIN_GRID_HEIGHT_DP = 80;
+
 export function GifStickerPanel() {
   const {theme, recentGifs, addRecentGif, adultGifsEnabled, pendingGifTab, setPendingGifTab} = useKeyboardStore();
   // Gboard's GIF panel has a GIFs/Stickers toggle at the top rather than
@@ -92,6 +116,11 @@ export function GifStickerPanel() {
   // and a slim mode-switch bar; tapping search swaps that bar for the keys.
   const [isTyping, setIsTyping] = useState(false);
   const [query, setQuery] = useState('');
+  // Which tag chip is active: a default tag (then `query` holds it too),
+  // RECENT_TAG, or null.
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const {height: windowHeight} = useWindowDimensions();
+  const gridMaxHeight = Math.max(MIN_GRID_HEIGHT_DP, windowHeight * WINDOW_HEIGHT_FRACTION - PANEL_CHROME_DP);
   const [results, setResults] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(false);
   // A failed request and a real "nothing matched" both used to collapse
@@ -172,9 +201,15 @@ export function GifStickerPanel() {
   }, [adultGifsEnabled, contentType]);
 
   // Gboard never shows a blank panel - it's trending content until you
-  // type a query. Re-runs whenever the GIFs/Stickers toggle changes, since
-  // that's really just switching to a different backend endpoint.
+  // type a query. Loaded when the panel opens, when switching GIFs/Stickers
+  // (each has its own feed), and whenever the query is emptied again -
+  // previously emptying the box (or, now, deselecting a tag chip) left a
+  // blank grid instead of going back to trending.
+  const queryIsEmpty = !query.trim();
   useEffect(() => {
+    if (!queryIsEmpty) return;
+    setHasMore(false);
+    pageRef.current = 1;
     // Tabs with no trending feed (18+) open empty and wait for a query
     // rather than auto-loading anything.
     if (!trendingEndpoint) {
@@ -184,14 +219,15 @@ export function GifStickerPanel() {
       return;
     }
     (async () => {
+      setResults([]);
       setLoading(true);
       setError(null);
       try {
         const response = await apiClient.get<{results: GifResult[]}>(trendingEndpoint);
         if (!queryRef.current.trim()) {
-          // Only apply if the user hasn't since started typing a real
-          // search - don't clobber live results with a slow-to-resolve
-          // trending fetch.
+          // Only apply if the user hasn't since started a real search -
+          // don't clobber live results with a slow-to-resolve trending
+          // fetch.
           setResults(response.data.results);
         }
       } catch (err: any) {
@@ -203,22 +239,16 @@ export function GifStickerPanel() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contentType]);
+  }, [queryIsEmpty, contentType]);
 
-  // Typing only edits the query - searching is an explicit action (the
-  // magnifier key, or the ✓ next to the box). Previously every keystroke
-  // fired a debounced request, so a five-letter word meant five searches,
-  // each one's results flashing up and being replaced by the next.
-  //
-  // Emptying the box still clears the grid, so a stale result set doesn't
-  // sit under an empty query - that's local state only, no request.
+  // Editing the query by hand means it's no longer the tag that was
+  // tapped; typing anything while Recent is open switches to searching.
   useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      setError(null);
-      setHasMore(false);
-      pageRef.current = 1;
+    if (!selectedTag) return;
+    if (selectedTag === RECENT_TAG ? query.trim() : query !== selectedTag) {
+      setSelectedTag(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   // Re-run the current query when switching GIFs/Stickers/18+, since the
@@ -335,12 +365,39 @@ export function GifStickerPanel() {
     if (type === contentType) return;
     setContentType(type);
     setError(null);
+    // Each tab has its own default tags, so a tag search doesn't carry
+    // over - but Recent does (it just shows the new tab's recents).
+    if (selectedTag && selectedTag !== RECENT_TAG) {
+      setSelectedTag(null);
+      setQuery('');
+    }
     // The query text carries over (switching tabs mid-search re-runs the
     // same query against the other library, matching Gboard) - only the
     // results themselves need clearing so the old type's grid doesn't
     // flash before the new fetch resolves.
     setResults([]);
   };
+
+  // Tapping the active chip again deselects it, back to trending.
+  const selectTag = (tag: string) => {
+    if (selectedTag === tag) {
+      setSelectedTag(null);
+      if (tag !== RECENT_TAG) setQuery('');
+      return;
+    }
+    setSelectedTag(tag);
+    if (tag === RECENT_TAG) {
+      setQuery('');
+      return;
+    }
+    setQuery(tag);
+    runSearch(tag);
+  };
+
+  // Recents are kept per tab: 18+ results' ids carry the "adult:" prefix
+  // their provider gives them (see queryAllProviders), so 18+ clips only
+  // ever show under the 18+ tab's Recent, never under GIFs or Stickers.
+  const tabRecents = recentGifs.filter(entry => (contentType === 'adult') === entry.id.startsWith('adult:'));
 
   const showFeedback = (message: string) => {
     if (feedbackTimeoutRef.current) {
@@ -480,7 +537,14 @@ export function GifStickerPanel() {
       </View>
 
       {!isTyping && (
-        <View style={styles.typeToggleRow}>
+        // Tabs, then Recent, then this tab's default tags - all one row
+        // that scrolls sideways, so any number of tags fits.
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.typeToggleRow}
+          contentContainerStyle={styles.typeToggleContent}
+          keyboardShouldPersistTaps="handled">
           {/* The 18+ tab only exists once the user has opted in via
               settings - see adultGifsEnabled in the store. */}
           {(['gif', 'sticker', ...(adultGifsEnabled ? (['adult'] as const) : [])] as ContentType[]).map(type => (
@@ -496,7 +560,30 @@ export function GifStickerPanel() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+          <View style={[styles.tagDivider, {backgroundColor: theme.keyText + '33'}]} />
+          {[RECENT_TAG, ...DEFAULT_TAGS[contentType]].map(tag => {
+            const selected = selectedTag === tag;
+            return (
+              <TouchableOpacity
+                key={tag}
+                style={[
+                  styles.tagChip,
+                  {
+                    backgroundColor: selected ? theme.accent + '33' : 'transparent',
+                    borderColor: selected ? theme.accent : theme.keyText + '33',
+                  },
+                ]}
+                onPress={() => selectTag(tag)}>
+                {tag === RECENT_TAG && (
+                  <Icon name="history" size={14} color={selected ? theme.accent : theme.keyText} style={styles.tagIcon} />
+                )}
+                <Text style={{color: selected ? theme.accent : theme.keyText, fontSize: 12}}>
+                  {tag === RECENT_TAG ? 'Recent' : tag}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       )}
 
       {feedback && (
@@ -514,28 +601,33 @@ export function GifStickerPanel() {
         screen). Rendering both at once was exactly what clipped the
         bottom rows of the keyboard off-screen.
       */}
-      {!isTyping && !query.trim() && recentGifs.length > 0 && (
-        <>
-          <Text style={[styles.trendingLabel, {color: theme.keyText + '99'}]}>RECENTLY USED · WORKS OFFLINE</Text>
-          <FlatList
-            data={recentGifs}
-            keyExtractor={item => item.id}
-            numColumns={3}
-            style={[styles.grid, styles.recentsGrid]}
-            renderItem={({item}) => (
-              <TouchableOpacity style={styles.cell} onPress={() => resendRecent(item)}>
-                <Image source={{uri: item.previewUri}} style={styles.thumb} resizeMode="cover" />
-              </TouchableOpacity>
-            )}
-          />
-        </>
-      )}
-
-      {isTyping ? null : loading ? (
+      {isTyping ? null : selectedTag === RECENT_TAG ? (
+        tabRecents.length === 0 ? (
+          <Text style={[styles.statusMessage, {color: theme.keyText + '99'}]}>
+            Nothing sent from this tab yet. {typeLabel[0].toUpperCase() + typeLabel.slice(1)} you send show up here,
+            and work offline.
+          </Text>
+        ) : (
+          <>
+            <Text style={[styles.trendingLabel, {color: theme.keyText + '99'}]}>RECENTLY USED · WORKS OFFLINE</Text>
+            <FlatList
+              data={tabRecents}
+              keyExtractor={item => item.id}
+              numColumns={3}
+              style={[styles.grid, {maxHeight: gridMaxHeight}]}
+              renderItem={({item}) => (
+                <TouchableOpacity style={styles.cell} onPress={() => resendRecent(item)}>
+                  <Image source={{uri: item.previewUri}} style={styles.thumb} resizeMode="cover" />
+                </TouchableOpacity>
+              )}
+            />
+          </>
+        )
+      ) : loading ? (
         // A grid of placeholder tiles the same shape as the real results,
         // rather than a lone spinner - the panel keeps its size, and the
         // results visibly fill in where the skeleton was.
-        <View style={[styles.grid, styles.resultsGrid]}>
+        <View style={[styles.grid, {maxHeight: gridMaxHeight}]}>
           {[0, 1, 2].map(row => (
             <View key={row} style={styles.skeletonRow}>
               {[0, 1, 2].map(col => (
@@ -562,7 +654,7 @@ export function GifStickerPanel() {
             data={results}
             keyExtractor={item => item.id}
             numColumns={3}
-            style={[styles.grid, styles.resultsGrid]}
+            style={[styles.grid, {maxHeight: gridMaxHeight}]}
             // Keeps offscreen rows from piling up decoded bitmaps as more
             // pages are appended.
             removeClippedSubviews
@@ -652,8 +744,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   typeToggleRow: {
-    flexDirection: 'row',
+    flexGrow: 0,
     marginBottom: 4,
+  },
+  typeToggleContent: {
+    alignItems: 'center',
+    paddingRight: 8,
+  },
+  tagDivider: {
+    width: 1,
+    height: 20,
+    marginRight: 8,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  tagIcon: {
+    marginRight: 4,
   },
   typeToggle: {
     paddingVertical: 6,
@@ -661,11 +774,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginRight: 8,
   },
+  // Floats over the grid rather than taking a row of its own: as a row it
+  // pushed everything below it down by its height while it showed, which
+  // was enough to shove the mode bar past the window's height cap.
   feedbackBanner: {
+    position: 'absolute',
+    top: 52,
+    left: 8,
+    right: 8,
+    zIndex: 10,
+    elevation: 6,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    marginBottom: 4,
   },
   feedbackText: {
     color: '#FFFFFF',
@@ -693,23 +814,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingBottom: 2,
   },
-  grid: {
-    // Height comes from the two variants below - the panel's total height
-    // is measured by App.tsx's onLayout and then clamped natively to 55%
-    // of the screen (MAX_HEIGHT_FRACTION in KeyboardReactView), so a grid
-    // tall enough to push the total past that cap gets its tail - and the
-    // mode bar underneath it - clipped off the bottom of the window.
-  },
-  recentsGrid: {
-    maxHeight: 110,
-  },
-  // ~490dp of window at the 55% cap, minus roughly 210dp of chrome
-  // (toolbar, search box, tab row, mode bar, padding), leaves under 282dp
-  // for the grid. 260 keeps a little slack for the TRENDING label and the
-  // inline error row.
-  resultsGrid: {
-    maxHeight: 260,
-  },
+  // Height is set inline from gridMaxHeight - see PANEL_CHROME_DP.
+  grid: {},
   cell: {
     flex: 1,
     // Caps a cell at one column's worth of width. Without this, a final
