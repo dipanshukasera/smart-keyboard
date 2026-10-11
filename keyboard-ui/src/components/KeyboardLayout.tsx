@@ -104,6 +104,11 @@ interface KeyboardLayoutProps {
   compact?: boolean;
 }
 
+// A row's width in key units (a key's `width`, defaulting to 1).
+function rowUnits(row: KeyDef[]): number {
+  return row.reduce((sum, keyDef) => sum + (keyDef.width ?? 1), 0);
+}
+
 // Gboard renders shift/delete/enter/emoji as icon glyphs rather than words
 // or raw emoji characters.
 function actionIconName(keyDef: KeyDef, enterIconName: string): string | null {
@@ -612,11 +617,19 @@ export function KeyboardLayout({
           ))}
         </View>
       )}
-      {layout.rows.map((row, rowIndex) => (
+      {layout.rows.map((row, rowIndex) => {
+        // Gboard indents the middle letter row (a-l: 9 keys under q-p's 10)
+        // by half a key on each side rather than stretching its keys to the
+        // full width. Worked out from the key widths rather than hard-coded,
+        // so a layout whose second row is already full (AZERTY's qsdf...m)
+        // gets no inset.
+        const sideInset = rowIndex === 1 ? Math.max(0, (rowUnits(layout.rows[0]) - rowUnits(row)) / 2) : 0;
+        return (
         <View
           key={rowIndex}
           style={[styles.row, {marginVertical: rowMarginVertical}]}
           onLayout={trackRowLayout(String(rowIndex))}>
+          {sideInset > 0 && <View style={{flex: sideInset}} />}
           {row.map((keyDef, keyIndex) => {
             const keyId = `${rowIndex}-${keyIndex}`;
             const keyLabel = isShiftActive ? keyDef.key.toUpperCase() : keyDef.key;
@@ -798,8 +811,10 @@ export function KeyboardLayout({
               </TouchableOpacity>
             );
           })}
+          {sideInset > 0 && <View style={{flex: sideInset}} />}
         </View>
-      ))}
+        );
+      })}
       {keyPreview}
     </View>
   );
