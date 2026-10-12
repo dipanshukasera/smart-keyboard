@@ -17,20 +17,17 @@ interface ToolCard {
  * "Keyboard Toolbar Explorations" reference's "All tools" screen).
  */
 export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) {
-  const {theme, setActivePanel, setPendingGifTab} = useKeyboardStore();
+  const {theme, setActivePanel, adultGifsEnabled} = useKeyboardStore();
 
   const tools: ToolCard[] = [
     {id: 'gifs', label: 'GIFs', iconName: 'gif', onPress: () => setActivePanel('gif')},
     {id: 'font', label: 'Font', iconName: 'text-fields', onPress: () => setActivePanel('font')},
-    {
-      id: 'stickers',
-      label: 'Stickers',
-      iconName: 'auto-awesome',
-      onPress: () => {
-        setPendingGifTab('sticker');
-        setActivePanel('gif');
-      },
-    },
+    {id: 'stickers', label: 'Stickers', iconName: 'auto-awesome', onPress: () => setActivePanel('stickers')},
+    // Only once the user has opted in (Settings > Content) - see
+    // adultGifsEnabled in the store.
+    ...(adultGifsEnabled
+      ? [{id: 'adult', label: '18+', iconName: 'no-adult-content', onPress: () => setActivePanel('adultGifs')}]
+      : []),
     {id: 'clipboard', label: 'Clipboard', iconName: 'content-paste', onPress: onOpenClipboard},
     {id: 'translate', label: 'Translate', iconName: 'translate', onPress: () => setActivePanel('translate')},
     {id: 'themes', label: 'Themes', iconName: 'contrast', onPress: () => setActivePanel('themeCustomizer')},

@@ -175,8 +175,14 @@ export default function App() {
     switch (activePanel) {
       case 'emoji':
         return <EmojiPanel />;
+      // Keyed by type so switching between them remounts with a clean
+      // search, tags and results.
       case 'gif':
-        return <GifStickerPanel />;
+        return <GifStickerPanel key="gif" contentType="gif" />;
+      case 'stickers':
+        return <GifStickerPanel key="sticker" contentType="sticker" />;
+      case 'adultGifs':
+        return <GifStickerPanel key="adult" contentType="adult" />;
       case 'translate':
         return (
           <>
@@ -280,8 +286,10 @@ export default function App() {
             </>
           ) : (
             <>
+              {/* Opens All tools - a gear rather than "..." so it reads as
+                  where the keyboard's tools and options live. */}
               <ToolbarIcon
-                iconName="more-horiz"
+                iconName="settings"
                 onPress={() => setActivePanel('allTools')}
                 theme={theme}
                 compact={isLandscape}

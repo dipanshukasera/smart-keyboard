@@ -11,6 +11,8 @@ export type PanelType =
   | 'keyboard'
   | 'emoji'
   | 'gif'
+  | 'stickers'
+  | 'adultGifs'
   | 'symbols'
   | 'themeCustomizer'
   | 'clipboard'
@@ -47,6 +49,9 @@ export interface CachedGifEntry {
   previewUri: string;
   fullUri: string;
   timestamp: number;
+  // Which panel sent it, so Recent shows it in that panel only. Absent on
+  // entries saved before GIFs/Stickers/18+ became separate panels.
+  kind?: 'gif' | 'sticker' | 'adult';
 }
 
 export interface LastSuggestion {
@@ -187,7 +192,6 @@ interface KeyboardState {
   // before navigating to the 'gif' panel so it can open straight to that
   // tab, then cleared by GifStickerPanel on mount so it doesn't affect a
   // later plain "GIFs" open.
-  pendingGifTab: 'gif' | 'sticker' | null;
 
   setActiveLocale: (locale: string) => void;
   setActivePanel: (panel: PanelType) => void;
@@ -235,7 +239,6 @@ interface KeyboardState {
   setKeyFontFamily: (value: string | null) => void;
   setToolbarOrder: (order: ToolId[]) => void;
   cycleKeyboardDim: () => void;
-  setPendingGifTab: (tab: 'gif' | 'sticker' | null) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -275,7 +278,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   keyFontFamily: null,
   toolbarOrder: ALL_TOOL_IDS,
   keyboardDimLevel: 0,
-  pendingGifTab: null,
 
   setActiveLocale: locale => {
     set({activeLocale: locale});
@@ -548,7 +550,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(KEYBOARD_DIM_LEVEL_KEY, next);
   },
 
-  setPendingGifTab: tab => set({pendingGifTab: tab}),
 
   hydrate: async () => {
     const [

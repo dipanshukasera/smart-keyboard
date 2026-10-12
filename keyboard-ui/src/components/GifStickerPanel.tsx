@@ -35,7 +35,7 @@ interface GifResult {
 // on in the settings panel - its tab isn't rendered otherwise, and it maps
 // to a separate backend endpoint so its results are never mixed into the
 // ordinary GIF/sticker grids.
-type ContentType = 'gif' | 'sticker' | 'adult';
+export type ContentType = 'gif' | 'sticker' | 'adult';
 
 const {ClipboardModule} = NativeModules;
 
@@ -91,23 +91,19 @@ const WINDOW_HEIGHT_FRACTION = 0.55;
 const PANEL_CHROME_DP = 170;
 const MIN_GRID_HEIGHT_DP = 80;
 
-export function GifStickerPanel() {
-  const {theme, recentGifs, addRecentGif, adultGifsEnabled, pendingGifTab, setPendingGifTab} = useKeyboardStore();
-  // Gboard's GIF panel has a GIFs/Stickers toggle at the top rather than
-  // two separate toolbar icons - same search box and grid, just pointed at
-  // a different backend endpoint (Klipy has a genuinely separate sticker
-  // library, not GIFs re-tagged - see gifProviders.js).
-  //
-  // pendingGifTab is a one-shot request set by AllToolsSheet's "Stickers"
-  // card (see store) so that tool can land straight on the sticker tab
-  // instead of always opening to GIFs and making the user switch - cleared
-  // immediately so it doesn't stick around and hijack a later plain "GIFs"
-  // open.
-  const [contentType, setContentType] = useState<ContentType>(pendingGifTab ?? 'gif');
-  useEffect(() => {
-    if (pendingGifTab) setPendingGifTab(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+// One content type per panel: GIFs (toolbar GIF button, All tools), and
+// Stickers and 18+ as their own All tools entries - no switching between
+// them inside the panel, which is just the search box, tags and results.
+// App.tsx keys each instance by type, so opening a different one starts
+// from a clean slate.
+const SEARCH_PLACEHOLDER: Record<ContentType, string> = {
+  gif: 'Search GIFs',
+  sticker: 'Search stickers',
+  adult: 'Search 18+ GIFs',
+};
+
+export function GifStickerPanel({contentType}: {contentType: ContentType}) {
+  const {theme, recentGifs, addRecentGif} = useKeyboardStore();
   // A keyboard's own window can't summon another system keyboard on top of
   // itself, so there's no real focusable TextInput here - tapping the
   // search box swaps this panel into "typing" mode, reusing the same
@@ -194,16 +190,6 @@ export function GifStickerPanel() {
   const trendingEndpoint = ENDPOINTS[contentType].trending;
   const searchEndpoint = ENDPOINTS[contentType].search;
   const typeLabel = ENDPOINTS[contentType].label;
-
-  // Turning the setting off while the 18+ tab is open shouldn't leave the
-  // user stranded on a tab that no longer exists.
-  useEffect(() => {
-    if (!adultGifsEnabled && contentType === 'adult') {
-      setContentType('gif');
-      setResults([]);
-      setError(null);
-    }
-  }, [adultGifsEnabled, contentType]);
 
   // Gboard never shows a blank panel - it's trending content until you
   // type a query. Loaded when the panel opens, when switching GIFs/Stickers
@@ -359,23 +345,6 @@ export function GifStickerPanel() {
     );
   };
 
-  const switchContentType = (type: ContentType) => {
-    if (type === contentType) return;
-    setContentType(type);
-    setError(null);
-    // Each tab has its own default tags, so a tag search doesn't carry
-    // over - but Recent does (it just shows the new tab's recents).
-    if (selectedTag && selectedTag !== RECENT_TAG) {
-      setSelectedTag(null);
-      setQuery('');
-    }
-    // The query text carries over (switching tabs mid-search re-runs the
-    // same query against the other library, matching Gboard) - only the
-    // results themselves need clearing so the old type's grid doesn't
-    // flash before the new fetch resolves.
-    setResults([]);
-  };
-
   // Tapping the active chip again deselects it, back to trending.
   const selectTag = (tag: string) => {
     if (selectedTag === tag) {
@@ -419,10 +388,13 @@ export function GifStickerPanel() {
     selectGif(item);
   };
 
-  // Recents are kept per tab: 18+ results' ids carry the "adult:" prefix
-  // their provider gives them (see queryAllProviders), so 18+ clips only
-  // ever show under the 18+ tab's Recent, never under GIFs or Stickers.
-  const tabRecents = recentGifs.filter(entry => (contentType === 'adult') === entry.id.startsWith('adult:'));
+  // Recents are kept per panel. Entries record which panel sent them;
+  // older ones don't, so for those 18+ is told apart by the "adult:" id
+  // prefix its provider gives (see queryAllProviders) and the rest show
+  // under both GIFs and Stickers. 18+ never shows outside the 18+ panel.
+  const tabRecents = recentGifs.filter(entry =>
+    entry.kind ? entry.kind === contentType : (contentType === 'adult') === entry.id.startsWith('adult:'),
+  );
 
   const showFeedback = (message: string) => {
     if (feedbackTimeoutRef.current) {
@@ -477,7 +449,7 @@ export function GifStickerPanel() {
     const previewUri = await GifCommit.cacheGif(gif.previewUrl);
     const fullUri = fullUrl === gif.previewUrl ? previewUri : await GifCommit.cacheGif(fullUrl);
     if (previewUri && fullUri) {
-      addRecentGif({id: gif.id, previewUri, fullUri, timestamp: Date.now()});
+      addRecentGif({id: gif.id, previewUri, fullUri, timestamp: Date.now(), kind: contentType});
     }
   };
 
@@ -515,7 +487,7 @@ export function GifStickerPanel() {
           <View style={styles.searchBoxContent}>
             {!query && !isTyping && (
               <Text style={{color: theme.keyText + '99'}} numberOfLines={1}>
-                Search GIFs & stickers
+                {SEARCH_PLACEHOLDER[contentType]}
               </Text>
             )}
             {!!query && (
@@ -556,30 +528,14 @@ export function GifStickerPanel() {
       </View>
 
       {!isTyping && (
-        // Tabs, then Recent, then this tab's default tags - all one row
-        // that scrolls sideways, so any number of tags fits.
+        // Recent, then this type's default tags - one row that scrolls
+        // sideways, so any number of tags fits.
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.typeToggleRow}
           contentContainerStyle={styles.typeToggleContent}
           keyboardShouldPersistTaps="handled">
-          {/* The 18+ tab only exists once the user has opted in via
-              settings - see adultGifsEnabled in the store. */}
-          {(['gif', 'sticker', ...(adultGifsEnabled ? (['adult'] as const) : [])] as ContentType[]).map(type => (
-            <TouchableOpacity
-              key={type}
-              style={[
-                styles.typeToggle,
-                {backgroundColor: contentType === type ? theme.accent : theme.keyBackground},
-              ]}
-              onPress={() => switchContentType(type)}>
-              <Text style={{color: contentType === type ? '#FFFFFF' : theme.keyText, fontSize: 12, fontWeight: '600'}}>
-                {type === 'gif' ? 'GIFs' : type === 'sticker' ? 'Stickers' : '18+'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-          <View style={[styles.tagDivider, {backgroundColor: theme.keyText + '33'}]} />
           {[RECENT_TAG, ...DEFAULT_TAGS[contentType]].map(tag => {
             const selected = selectedTag === tag;
             return (
@@ -746,7 +702,7 @@ export function GifStickerPanel() {
           }}
         />
       ) : (
-        <ExpressionModeBar active="gif" onDelete={() => deleteFromQuery(1)} />
+        <ExpressionModeBar active={contentType === 'gif' ? 'gif' : 'none'} onDelete={() => deleteFromQuery(1)} />
       )}
     </View>
   );
@@ -807,11 +763,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingRight: 8,
   },
-  tagDivider: {
-    width: 1,
-    height: 20,
-    marginRight: 8,
-  },
   tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -823,12 +774,6 @@ const styles = StyleSheet.create({
   },
   tagIcon: {
     marginRight: 4,
-  },
-  typeToggle: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    marginRight: 8,
   },
   // Floats over the grid rather than taking a row of its own: as a row it
   // pushed everything below it down by its height while it showed, which

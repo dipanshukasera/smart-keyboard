@@ -17,7 +17,8 @@ const HOLD_REPEAT_INITIAL_DELAY_MS = 400;
 const HOLD_REPEAT_INTERVAL_MS = 60;
 
 interface ExpressionModeBarProps {
-  active: 'emoji' | 'gif';
+  // 'none' for the Stickers and 18+ panels, which have no button here.
+  active: 'emoji' | 'gif' | 'none';
   // Emoji has no local text buffer, so its delete acts on the real focused
   // field; GifStickerPanel's fake search box overrides this to edit its
   // own local query string instead (see the "no keyboard for a keyboard"
