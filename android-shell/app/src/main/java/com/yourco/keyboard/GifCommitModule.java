@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Sends a GIF directly into the focused field via InputConnection.commitContent
@@ -48,6 +49,15 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void isRichContentSupported(Promise promise) {
         promise.resolve(currentFieldAcceptsGif());
+    }
+
+    // Whether the focused field would accept this URL's content type (video
+    // for an mp4, an image otherwise) - lets JS work out ahead of time which
+    // file a send will use, so it can start fetching it before Send is tapped.
+    @ReactMethod
+    public void acceptsUrl(String remoteUrl, Promise promise) {
+        EditorInfo info = InputConnectionHolder.editorInfo();
+        promise.resolve(info != null && accepts(info, mimeTypeFor(remoteUrl)));
     }
 
     // Downloads (or reuses an already-cached copy of) any GIF/thumbnail URL
@@ -197,7 +207,20 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
         }
     }
 
+    // One lock per URL. A file can be requested twice at once - fetched ahead
+    // while an 18+ preview is open, then requested again by Send before that
+    // finished - and both writing the same .part file corrupted it. The
+    // second caller now waits for the first and gets its finished file.
+    private static final ConcurrentHashMap<String, Object> DOWNLOAD_LOCKS = new ConcurrentHashMap<>();
+
     private File downloadToCache(String remoteUrl) throws Exception {
+        Object lock = DOWNLOAD_LOCKS.computeIfAbsent(remoteUrl, key -> new Object());
+        synchronized (lock) {
+            return downloadToCacheLocked(remoteUrl);
+        }
+    }
+
+    private File downloadToCacheLocked(String remoteUrl) throws Exception {
         File cacheDir = new File(getReactApplicationContext().getCacheDir(), "gifs");
         if (!cacheDir.exists()) {
             cacheDir.mkdirs();

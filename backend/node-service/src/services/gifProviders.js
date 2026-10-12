@@ -186,10 +186,10 @@ function mapRedgifsItem(item) {
   if (!preview || !full) {
     return null;
   }
-  // "silent" first: the grid autoplays these muted and looping, so the
-  // audio track is dead weight over mobile data. sd before hd for the
-  // same reason - a thumbnail-sized tile doesn't need the large encode.
-  const video = [urls.silent, urls.sd, urls.hd].find(url => VIDEO_URL_PATTERN.test(url || ''));
+  // sd (the 480p "-mobile" encode) first: this is the file that's previewed
+  // and sent, and "silent" is the full-resolution encode minus audio - up to
+  // 1080p and ~9MB against ~1MB for sd, which made 18+ sends take seconds.
+  const video = [urls.sd, urls.silent, urls.hd].find(url => VIDEO_URL_PATTERN.test(url || ''));
   return {id: String(item.id), previewUrl: preview, fullUrl: full, videoUrl: video ?? null};
 }
 

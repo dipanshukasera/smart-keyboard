@@ -2,6 +2,7 @@ import {NativeModules} from 'react-native';
 
 interface GifCommitNative {
   isRichContentSupported(): Promise<boolean>;
+  acceptsUrl(remoteUrl: string): Promise<boolean>;
   commitGif(remoteUrl: string): Promise<boolean>;
   cacheGif(remoteUrl: string): Promise<string>;
 }
@@ -16,6 +17,17 @@ export const GifCommit = {
   async isRichContentSupported(): Promise<boolean> {
     if (!native) return false;
     return native.isRichContentSupported();
+  },
+
+  // Whether the focused field would accept this URL's content (an mp4 needs
+  // a field that takes video). False when there's no field or no native side.
+  async acceptsUrl(remoteUrl: string): Promise<boolean> {
+    if (!native) return false;
+    try {
+      return await native.acceptsUrl(remoteUrl);
+    } catch {
+      return false;
+    }
   },
 
   // Downloads the GIF and hands it to the focused field via

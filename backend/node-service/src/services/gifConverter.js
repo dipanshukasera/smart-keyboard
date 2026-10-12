@@ -103,7 +103,9 @@ async function convertToGif(src) {
 // smaller source costs nothing visible. Not every clip has a mobile
 // variant, hence the fallback.
 async function convertPreferringMobile(sourceUrl, outputPath) {
-  const mobileUrl = sourceUrl.replace(/(-silent)?\.mp4$/i, '-mobile.mp4');
+  // The keyboard now sends the -mobile encode itself; only derive it for
+  // an older client that still sends -silent/full-quality URLs.
+  const mobileUrl = /-mobile\.mp4$/i.test(sourceUrl) ? sourceUrl : sourceUrl.replace(/(-silent)?\.mp4$/i, '-mobile.mp4');
   if (mobileUrl !== sourceUrl) {
     try {
       return await runConversion(mobileUrl, outputPath);

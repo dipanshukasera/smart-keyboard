@@ -401,6 +401,12 @@ export function GifStickerPanel() {
       setPreviewReady(false);
       setPreviewFailed(false);
       setPreviewItem(item);
+      // Start fetching the exact file Send will use while the preview plays
+      // - for a converted GIF that also starts the conversion on the server.
+      // By the time Send is tapped it's usually already on the phone, and a
+      // Send mid-download waits for this one instead of starting another
+      // (see GifCommitModule's per-URL lock).
+      sendUrlFor(item).then(url => GifCommit.cacheGif(url));
     } else {
       selectGif(item);
     }
@@ -426,38 +432,33 @@ export function GifStickerPanel() {
     feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 1800);
   };
 
+  // Which file a send of `gif` will use. GIFs and stickers: the preview-size
+  // file the grid has already downloaded, so it sends in milliseconds
+  // (GifCommitModule copies it out of the image cache; the full-size file is
+  // 0.5-10MB). 18+ items are mp4 (Redgifs has no GIF), and far fewer fields
+  // accept video than images: the mp4 where the field takes video, else a
+  // real .gif converted from it on the backend, else the still frame.
+  const sendUrlFor = async (gif: GifResult): Promise<string> => {
+    if (!gif.videoUrl) return gif.previewUrl;
+    if (await GifCommit.acceptsUrl(gif.videoUrl)) return gif.videoUrl;
+    if (await GifCommit.isRichContentSupported()) return convertedGifUrl(gif.videoUrl);
+    return gif.fullUrl;
+  };
+
   const selectGif = async (gif: GifResult) => {
-    // Try to actually send the GIF into the focused field (this is how
-    // Instagram DMs, WhatsApp, Telegram, etc. actually receive a GIF - a
-    // pasted URL isn't a GIF as far as they're concerned). Only falls back
-    // to the clipboard when the field itself doesn't declare support for
-    // rich content, or the download/commit fails for some other reason.
-    // 18+ items are mp4 (Redgifs has no GIF), and far fewer fields accept
-    // video than images. So: the mp4 where it's taken, else a real .gif
-    // converted from it on the backend, else the still frame, and only
-    // then a pasted link.
-    let sentUrl: string | null = null;
-    if (gif.videoUrl) {
-      if (await GifCommit.commitGif(gif.videoUrl)) {
-        sentUrl = gif.videoUrl;
-      } else if (await GifCommit.isRichContentSupported()) {
-        const gifUrl = convertedGifUrl(gif.videoUrl);
-        if (await GifCommit.commitGif(gifUrl)) {
-          sentUrl = gifUrl;
-        }
-      }
-    }
-    // GIFs and stickers send the preview-size file the grid has already
-    // downloaded, so a tap sends in milliseconds (GifCommitModule copies it
-    // out of the image cache) - the full-size file is 0.5-10MB and had to be
-    // fetched on every tap. 18+ falls back to its still frame here.
+    // Sends the file into the focused field (this is how Instagram DMs,
+    // WhatsApp, Telegram etc. actually receive a GIF - a pasted URL isn't a
+    // GIF as far as they're concerned). If that fails, an 18+ clip falls
+    // back to its still frame, and only then to copying a link.
     const stillUrl = gif.videoUrl ? gif.fullUrl : gif.previewUrl;
-    if (!sentUrl && (await GifCommit.commitGif(stillUrl))) {
+    const url = await sendUrlFor(gif);
+    let sentUrl: string | null = (await GifCommit.commitGif(url)) ? url : null;
+    if (!sentUrl && url !== stillUrl && (await GifCommit.commitGif(stillUrl))) {
       sentUrl = stillUrl;
     }
-    if (sentUrl) {
-      showFeedback('Sent!');
-    } else {
+    // No confirmation on success - the GIF appearing in the chat is the
+    // confirmation. Only the fallback needs saying.
+    if (!sentUrl) {
       ClipboardModule?.setClipboardText(gif.videoUrl || gif.fullUrl);
       showFeedback('This app doesn’t accept images directly - link copied, paste it instead');
     }
@@ -482,9 +483,7 @@ export function GifStickerPanel() {
 
   const resendRecent = async (entry: {id: string; previewUri: string; fullUri: string}) => {
     const sent = await GifCommit.commitGif(entry.fullUri);
-    if (sent) {
-      showFeedback('Sent!');
-    } else {
+    if (!sent) {
       ClipboardModule?.setClipboardText(entry.fullUri);
       showFeedback('This app doesn’t accept images directly');
     }
@@ -726,17 +725,11 @@ export function GifStickerPanel() {
             renderItem={({item}) => (
               <TouchableOpacity style={styles.cell} onPress={() => onResultPress(item)}>
                 <GifThumb uri={item.previewUrl} pulse={skeletonPulse} skeletonColor={skeletonColor} />
-                {/* Video results (18+) render as their still frame with a
-                    play badge rather than autoplaying. A grid of ~78 live
-                    players spun up ~78 hardware decoders at once, which
-                    locked the keyboard up; the badge is what tells the
-                    user the tile is a video, and tapping it plays it in
-                    the preview (one player at a time). */}
-                {!!item.videoUrl && (
-                  <View style={styles.playBadge} pointerEvents="none">
-                    <Icon name="play-circle-filled" size={22} color="#FFFFFF" />
-                  </View>
-                )}
+                {/* Video results (18+) show their still frame rather than
+                    autoplaying - a grid of ~78 live players spun up ~78
+                    hardware decoders at once and locked the keyboard up.
+                    Tapping one plays it in the preview (one player at a
+                    time). */}
               </TouchableOpacity>
             )}
           />
@@ -893,9 +886,6 @@ const styles = StyleSheet.create({
     aspectRatio: 2,
     margin: 2,
   },
-  // Bottom-left rather than centred: a centred badge sits right on the
-  // subject of the thumbnail, and the corner keeps it readable against
-  // both light and dark frames thanks to the scrim behind it.
   gridFooter: {
     // The grid is 3 columns wide, so the footer has to span all of them to
     // sit centred under the results rather than in the first column.
@@ -920,13 +910,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
-  },
-  playBadge: {
-    position: 'absolute',
-    left: 4,
-    bottom: 4,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   thumb: {
     width: '100%',
