@@ -82,6 +82,27 @@ export function useKeyPreview() {
     keyRectRef.current[keyId] = {row, x, width, height};
   };
 
+  // The key at (x, y) in panel coordinates, or null. Each key's box is
+  // grown by `slop` on every side so a touch landing in the thin gap
+  // between two keys still counts for the nearer one, instead of being
+  // dropped - half the gap between neighbours (2dp key margins) never
+  // reaches into the neighbouring key itself.
+  const keyAt = (x: number, y: number, slop = 2): string | null => {
+    for (const [keyId, rect] of Object.entries(keyRectRef.current)) {
+      const top = rowTopRef.current[rect.row];
+      if (top == null) continue;
+      if (
+        x >= rect.x - slop &&
+        x < rect.x + rect.width + slop &&
+        y >= top - slop &&
+        y < top + rect.height + slop
+      ) {
+        return keyId;
+      }
+    }
+    return null;
+  };
+
   // `override` replaces what's shown for a moment that isn't a plain press
   // - the main keyboard uses it to swap a held top-row key's bubble to its
   // number once the long-press fires, drawn with an accent border.
@@ -140,6 +161,7 @@ export function useKeyPreview() {
     onBodyLayout,
     trackRowLayout,
     trackKeyLayout,
+    keyAt,
     renderPreview,
   };
 }

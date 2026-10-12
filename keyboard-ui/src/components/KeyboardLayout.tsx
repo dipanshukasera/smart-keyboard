@@ -1,6 +1,10 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
   DeviceEventEmitter,
+  findNodeHandle,
+  GestureResponderEvent,
+  LayoutChangeEvent,
+  NativeTouchEvent,
   PanResponder,
   StyleSheet,
   Text,
@@ -171,8 +175,17 @@ export function KeyboardLayout({
   // Which key (by "row-col" id) is currently pressed, for a visible
   // highlight while held, plus the Gboard-style preview bubble above it -
   // see useKeyPreview (shared with SymbolsNumberPanel).
-  const {pressedKeyId, setPressedKeyId, pressKey, releaseKey, onBodyLayout, trackRowLayout, trackKeyLayout, renderPreview} =
-    useKeyPreview();
+  const {
+    pressedKeyId,
+    setPressedKeyId,
+    pressKey,
+    releaseKey,
+    onBodyLayout,
+    trackRowLayout,
+    trackKeyLayout,
+    keyAt,
+    renderPreview,
+  } = useKeyPreview();
   // Which top-row key index is currently showing its number in an enlarged
   // popup above the key - Gboard shows this the moment the long-press
   // fires (not just silently swapping in the character), so holding
@@ -401,6 +414,67 @@ export function KeyboardLayout({
   const releaseKeyRef = useRef(releaseKey);
   releaseKeyRef.current = releaseKey;
 
+  // --- Tap keys: one multi-touch handler for the whole keyboard --------
+  // Plain keys (letters, punctuation, shift, ?123, enter, emoji, the
+  // number row) aren't individually touchable. React Native gives a touch
+  // gesture to one responder at a time, so with a TouchableOpacity per key
+  // a second finger landing while the first was still down (ordinary fast
+  // typing: "a" not yet released when "n" goes down) was folded into the
+  // first key's gesture and the second key was late or lost entirely.
+  // Instead the body receives every finger's touch-start and hit-tests it
+  // against the measured key boxes, so each finger types its own key the
+  // moment it lands. Space, delete and the top row keep their own handlers
+  // (drag/hold gestures); their touches simply aren't registered here.
+  const tapKeys: Record<string, {keyDef: KeyDef; label: string | null}> = {};
+  const tapKeysRef = useRef(tapKeys);
+  tapKeysRef.current = tapKeys;
+  // Touch identifier -> the key it pressed, to release the right one.
+  const activeTouchesRef = useRef(new Map<string, string>());
+  const bodyRef = useRef<View>(null);
+  // The body's position in the same coordinate space as touch pageX/pageY.
+  const bodyOriginRef = useRef<{x: number; y: number} | null>(null);
+
+  // A touch's position within the body. When the body itself is the touch
+  // target (the usual case, since tap keys pass touches through to it),
+  // locationX/Y already are that - and they recalibrate the body's origin
+  // for free. When another finger's gesture owns the target (e.g. a thumb
+  // resting on space), pageX/Y minus that origin gives the same thing.
+  const bodyPoint = (touch: NativeTouchEvent): {x: number; y: number} | null => {
+    if (Number(touch.target) === findNodeHandle(bodyRef.current)) {
+      bodyOriginRef.current = {x: touch.pageX - touch.locationX, y: touch.pageY - touch.locationY};
+      return {x: touch.locationX, y: touch.locationY};
+    }
+    const origin = bodyOriginRef.current;
+    return origin ? {x: touch.pageX - origin.x, y: touch.pageY - origin.y} : null;
+  };
+
+  const handleBodyTouchStart = (event: GestureResponderEvent) => {
+    for (const touch of event.nativeEvent.changedTouches) {
+      const point = bodyPoint(touch);
+      const keyId = point ? keyAt(point.x, point.y) : null;
+      const tapKey = keyId ? tapKeysRef.current[keyId] : undefined;
+      if (!keyId || !tapKey) continue;
+      activeTouchesRef.current.set(String(touch.identifier), keyId);
+      pressKey(keyId, tapKey.label);
+      handleKeyPress(tapKey.keyDef);
+    }
+  };
+
+  const handleBodyTouchEnd = (event: GestureResponderEvent) => {
+    for (const touch of event.nativeEvent.changedTouches) {
+      if (activeTouchesRef.current.delete(String(touch.identifier))) {
+        releaseKey();
+      }
+    }
+  };
+
+  const handleBodyLayout = (event: LayoutChangeEvent) => {
+    onBodyLayout(event);
+    bodyRef.current?.measure((_x, _y, _width, _height, pageX, pageY) => {
+      bodyOriginRef.current = {x: pageX, y: pageY};
+    });
+  };
+
   // --- Delete key: native HoldRepeatKeyView handlers --------------------
   // See android-shell/.../HoldRepeatKeyView.java for why hold-to-repeat and
   // drag-to-select both moved to a native touch handler: neither
@@ -467,23 +541,28 @@ export function KeyboardLayout({
   };
 
   // --- Number-hint keys (row 0): native HoldRepeatKeyView handlers ------
-  const handleNumberHintPressStart = (keyId: string, label: string) => pressKey(keyId, label);
+  // The letter is typed the moment the key is touched, like every other
+  // key - it used to wait for the finger to lift (so a hold could become
+  // the number instead), which made the top row's letters (e, t, o, i, r...
+  // the most common ones) consistently lag behind the rest. A hold now
+  // swaps the already-typed letter for the number.
+  const handleNumberHintPressStart = (keyId: string, label: string, keyDef: KeyDef) => {
+    pressKey(keyId, label);
+    handleKeyPress(keyDef);
+  };
 
   const handleNumberHintLongPress = (keyIndex: number) => {
     fireKeyFeedback();
     setNumberPreviewIndex(keyIndex);
+    deleteBackward(1);
     commitText(NUMBER_HINTS[keyIndex]);
     trackWord('');
     pendingSentenceEndRef.current = false;
   };
 
-  const handleNumberHintPressEnd = (keyDef: KeyDef, event: HoldRepeatPressEndEvent) => {
+  const handleNumberHintPressEnd = () => {
     releaseKey();
     setNumberPreviewIndex(null);
-    const {longPressFired, movedOutside, dragMode} = event.nativeEvent;
-    if (!longPressFired && !movedOutside && !dragMode) {
-      handleKeyPressRef.current(keyDef);
-    }
   };
 
   const spaceKeyDef: KeyDef = {key: 'space', action: 'space'};
@@ -581,17 +660,28 @@ export function KeyboardLayout({
 
   const keyboardBody = (
     <View
-      onLayout={onBodyLayout}
+      ref={bodyRef}
+      onLayout={handleBodyLayout}
+      onTouchStart={handleBodyTouchStart}
+      onTouchEnd={handleBodyTouchEnd}
+      onTouchCancel={handleBodyTouchEnd}
       style={[
         styles.container,
         {backgroundColor: theme.panelBackground, paddingVertical: 4 * verticalScale},
         isOneHanded && styles.oneHandedFlex,
       ]}>
       {showNumberRow && (
-        <View style={[styles.row, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('numrow')}>
-          {NUMBER_ROW_DIGITS.map((digit, index) => (
-            <TouchableOpacity
+        <View
+          pointerEvents="box-none"
+          style={[styles.row, {marginVertical: rowMarginVertical}]}
+          onLayout={trackRowLayout('numrow')}>
+          {NUMBER_ROW_DIGITS.map((digit, index) => {
+            tapKeys[`numrow-${index}`] = {keyDef: {key: digit}, label: digit};
+            return (
+            // A tap key - see handleBodyTouchStart.
+            <View
               key={digit}
+              pointerEvents="none"
               style={[
                 styles.key,
                 {
@@ -600,21 +690,16 @@ export function KeyboardLayout({
                   paddingVertical: keyPaddingVertical,
                 },
               ]}
-              activeOpacity={1}
-              onLayout={trackKeyLayout(`numrow-${index}`, 'numrow')}
-              onPressIn={() => {
-                pressKey(`numrow-${index}`, digit);
-                handleKeyPress({key: digit});
-              }}
-              onPressOut={releaseKey}>
+              onLayout={trackKeyLayout(`numrow-${index}`, 'numrow')}>
               <Text style={{color: theme.keyText, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
                 {digit}
               </Text>
               {pressedKeyId === `numrow-${index}` && (
                 <View pointerEvents="none" style={[styles.pressOverlay, {backgroundColor: pressOverlayColor}]} />
               )}
-            </TouchableOpacity>
-          ))}
+            </View>
+            );
+          })}
         </View>
       )}
       {layout.rows.map((row, rowIndex) => {
@@ -627,9 +712,12 @@ export function KeyboardLayout({
         return (
         <View
           key={rowIndex}
+          // box-none: the row itself never becomes the touch target, so
+          // touches on tap keys reach the body - see handleBodyTouchStart.
+          pointerEvents="box-none"
           style={[styles.row, {marginVertical: rowMarginVertical}]}
           onLayout={trackRowLayout(String(rowIndex))}>
-          {sideInset > 0 && <View style={{flex: sideInset}} />}
+          {sideInset > 0 && <View pointerEvents="none" style={{flex: sideInset}} />}
           {row.map((keyDef, keyIndex) => {
             const keyId = `${rowIndex}-${keyIndex}`;
             const keyLabel = isShiftActive ? keyDef.key.toUpperCase() : keyDef.key;
@@ -748,10 +836,10 @@ export function KeyboardLayout({
                   key={`${rowIndex}-${keyIndex}`}
                   mode="longPressOnce"
                   longPressDelayMs={LONG_PRESS_NUMBER_DELAY_MS}
-                  onPressStart={() => handleNumberHintPressStart(keyId, keyLabel)}
+                  onPressStart={() => handleNumberHintPressStart(keyId, keyLabel, keyDef)}
                   onLayout={trackKeyLayout(keyId, String(rowIndex))}
                   onLongPress={() => handleNumberHintLongPress(keyIndex)}
-                  onPressEnd={event => handleNumberHintPressEnd(keyDef, event)}
+                  onPressEnd={handleNumberHintPressEnd}
                   style={[
                     styles.key,
                     isPill && styles.pillKey,
@@ -773,33 +861,22 @@ export function KeyboardLayout({
               );
             }
 
-            // onPressIn (not onPress, which only fires on release after
-            // TouchableOpacity finishes checking the touch stayed in
-            // bounds) so a key registers the instant it's touched - the
-            // gap between the two was the main source of typing feeling
-            // laggy, especially typing quickly with overlapping taps.
+            // A tap key: typed by handleBodyTouchStart the instant a finger
+            // lands on it (only character keys get a preview bubble -
+            // shift, ?123, enter etc. just take the pressed highlight, as
+            // in Gboard).
+            tapKeys[keyId] = {keyDef, label: keyDef.action ? null : keyLabel};
             return (
-              <TouchableOpacity
+              <View
                 key={`${rowIndex}-${keyIndex}`}
+                pointerEvents="none"
                 style={[
                   styles.key,
                   isPill && styles.pillKey,
                   isAccent && styles.accentKey,
                   {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                 ]}
-                // activeOpacity 1: TouchableOpacity's default fades the whole
-                // key (pressOverlay included) to 20% while held, which on
-                // the light theme blended a white key into the near-white
-                // tray - the press highlight was effectively invisible.
-                activeOpacity={1}
-                onLayout={keyDef.action ? undefined : trackKeyLayout(keyId, String(rowIndex))}
-                onPressIn={() => {
-                  // Only character keys get a preview bubble - shift, ?123,
-                  // enter etc. just take the pressed highlight, as in Gboard.
-                  pressKey(keyId, keyDef.action ? null : keyLabel);
-                  handleKeyPress(keyDef);
-                }}
-                onPressOut={releaseKey}>
+                onLayout={trackKeyLayout(keyId, String(rowIndex))}>
                 {iconName ? (
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (
@@ -808,10 +885,10 @@ export function KeyboardLayout({
                   </Text>
                 )}
                 {pressOverlay}
-              </TouchableOpacity>
+              </View>
             );
           })}
-          {sideInset > 0 && <View style={{flex: sideInset}} />}
+          {sideInset > 0 && <View pointerEvents="none" style={{flex: sideInset}} />}
         </View>
         );
       })}
