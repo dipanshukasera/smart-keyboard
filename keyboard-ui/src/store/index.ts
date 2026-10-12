@@ -71,13 +71,17 @@ const ADULT_GIFS_ENABLED_KEY = 'adult_gifs_enabled';
 const NUMBER_ROW_ENABLED_KEY = 'number_row_enabled';
 const HINGLISH_ENABLED_KEY = 'hinglish_enabled';
 const KEY_STYLE_KEY = 'key_style';
+const SWIPE_TYPING_ENABLED_KEY = 'swipe_typing_enabled';
 const HAPTIC_FEEDBACK_ENABLED_KEY = 'haptic_feedback_enabled';
 const KEY_SOUND_ENABLED_KEY = 'key_sound_enabled';
 // Persisted and shown as a real toggle (see SettingsPanel), but there is no
 // swipe-to-type gesture recognizer in this app yet - turning it on changes
 // nothing today. Flagged as such in the UI rather than silently doing
 // nothing with no explanation.
-const SWIPE_TRAIL_ENABLED_KEY = 'swipe_trail_enabled';
+// "_v2": the old key held this switch's value from before swipe typing
+// existed, when it did nothing - a stale "off" from then shouldn't hide
+// the trail now that there is one.
+const SWIPE_TRAIL_ENABLED_KEY = 'swipe_trail_enabled_v2';
 const KEY_FONT_FAMILY_KEY = 'key_font_family';
 const TOOLBAR_ORDER_KEY = 'toolbar_order';
 const KEYBOARD_DIM_LEVEL_KEY = 'keyboard_dim_level';
@@ -154,6 +158,10 @@ interface KeyboardState {
   hinglishEnabled: boolean;
   // Key shape/outline/3D/bold - see themes/keyStyle.ts.
   keyStyle: KeyStyle;
+  // Gesture typing: drag across the letters to type a word (see
+  // services/swipeDecoder.ts). The trail drawn under the finger is a
+  // separate switch, swipeTypingTrailEnabled.
+  swipeTypingEnabled: boolean;
   // Real: a short Vibration.vibrate() on every key press when on.
   hapticFeedbackEnabled: boolean;
   // Real: plays Android's built-in keypress click sound (see
@@ -211,6 +219,11 @@ interface KeyboardState {
   setNumberRowEnabled: (value: boolean) => void;
   setHinglishEnabled: (value: boolean) => void;
   setKeyStyle: (patch: Partial<KeyStyle>) => void;
+  setSwipeTypingEnabled: (value: boolean) => void;
+  // After a swipe: `word` was typed (without a trailing space), and the
+  // strip offers `alternatives` - tapping one replaces it like any other
+  // suggestion.
+  setSwipeResult: (word: string, alternatives: string[]) => void;
   setHapticFeedbackEnabled: (value: boolean) => void;
   setKeySoundEnabled: (value: boolean) => void;
   setSwipeTypingTrailEnabled: (value: boolean) => void;
@@ -250,6 +263,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   numberRowEnabled: false,
   hinglishEnabled: true,
   keyStyle: DEFAULT_KEY_STYLE,
+  swipeTypingEnabled: true,
   hapticFeedbackEnabled: true,
   keySoundEnabled: false,
   swipeTypingTrailEnabled: true,
@@ -470,6 +484,19 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(HINGLISH_ENABLED_KEY, value);
   },
 
+  setSwipeTypingEnabled: value => {
+    set({swipeTypingEnabled: value});
+    ThemeStorage.saveJSON(SWIPE_TYPING_ENABLED_KEY, value);
+  },
+
+  setSwipeResult: (word, alternatives) =>
+    set({
+      typedWord: word,
+      suggestions: alternatives.filter(alt => alt !== word).slice(0, 3),
+      emojiSuggestion: getEmojiSuggestion(word),
+      isToolbarExpanded: false,
+    }),
+
   setKeyStyle: patch => {
     const keyStyle = {...get().keyStyle, ...patch};
     set({keyStyle});
@@ -533,6 +560,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       keyboardDimLevel,
       hinglishEnabled,
       keyStyle,
+      swipeTypingEnabled,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -556,6 +584,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<number>(KEYBOARD_DIM_LEVEL_KEY, 0),
       ThemeStorage.loadJSON<boolean>(HINGLISH_ENABLED_KEY, true),
       ThemeStorage.loadJSON<KeyStyle>(KEY_STYLE_KEY, DEFAULT_KEY_STYLE),
+      ThemeStorage.loadJSON<boolean>(SWIPE_TYPING_ENABLED_KEY, true),
     ]);
     set({
       // English switched from US to UK spelling (en-US -> en-GB); a saved
@@ -587,6 +616,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       // Merged over the defaults so a style saved by an older build (fewer
       // fields) still gets every option.
       keyStyle: {...DEFAULT_KEY_STYLE, ...keyStyle},
+      swipeTypingEnabled,
     });
   },
 }));

@@ -23,6 +23,9 @@ import {buildStyledLayout} from '../layouts/layoutStyles';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
 import {useKeyPreview} from '../hooks/useKeyPreview';
 import {keyDecor} from '../themes/keyStyle';
+import {decodeSwipe, Point} from '../services/swipeDecoder';
+import {getWordList} from '../services/dictionary';
+import {SwipeTrail, SwipeTrailHandle} from './SwipeTrail';
 
 // A full row of digit keys shown above the top letter row when the
 // "Number row" setting is on - distinct from NUMBER_HINTS below (the
@@ -160,6 +163,9 @@ export function KeyboardLayout({
     keySoundEnabled,
     keyFontFamily,
     keyStyle,
+    swipeTypingEnabled,
+    swipeTypingTrailEnabled,
+    setSwipeResult,
   } = useKeyboardStore();
   const lastSpaceTimeRef = useRef(0);
   // Auto-capitalization, mid-sentence case: set by commitChar whenever the
@@ -186,6 +192,7 @@ export function KeyboardLayout({
     trackRowLayout,
     trackKeyLayout,
     keyAt,
+    keyBoxes,
     renderPreview,
   } = useKeyPreview();
   // Which top-row key index is currently showing its number in an enlarged
@@ -441,11 +448,13 @@ export function KeyboardLayout({
 
   // A touch's position within the body. When the body itself is the touch
   // target (the usual case, since tap keys pass touches through to it),
-  // locationX/Y already are that - and they recalibrate the body's origin
-  // for free. When another finger's gesture owns the target (e.g. a thumb
-  // resting on space), pageX/Y minus that origin gives the same thing.
-  const bodyPoint = (touch: NativeTouchEvent): {x: number; y: number} | null => {
-    if (Number(touch.target) === findNodeHandle(bodyRef.current)) {
+  // a touch-start's locationX/Y already are that - and they recalibrate the
+  // body's origin for free. Otherwise, and for every move, pageX/Y minus
+  // that origin gives the same thing: locationX/Y during a move are
+  // measured from whatever view is under the finger at that moment (e.g. a
+  // top-row key), not the target, so they jump around mid-swipe.
+  const bodyPoint = (touch: NativeTouchEvent, isStart = false): {x: number; y: number} | null => {
+    if (isStart && Number(touch.target) === findNodeHandle(bodyRef.current)) {
       bodyOriginRef.current = {x: touch.pageX - touch.locationX, y: touch.pageY - touch.locationY};
       return {x: touch.locationX, y: touch.locationY};
     }
@@ -454,9 +463,18 @@ export function KeyboardLayout({
   };
 
   const handleBodyTouchStart = (event: GestureResponderEvent) => {
+    // A second finger landing means fast tap typing, not a swipe.
+    if (event.nativeEvent.touches.length > 1 && swipeRef.current && !swipeRef.current.active) {
+      swipeRef.current = null;
+    }
     for (const touch of event.nativeEvent.changedTouches) {
-      const point = bodyPoint(touch);
+      const point = bodyPoint(touch, true);
       const keyId = point ? keyAt(point.x, point.y) : null;
+      if (point && keyId && event.nativeEvent.touches.length === 1) {
+        maybeStartSwipe(String(touch.identifier), point, keyId);
+      }
+      // Other fingers don't type while a swipe is being drawn.
+      if (swipeRef.current?.active) continue;
       const tapKey = keyId ? tapKeysRef.current[keyId] : undefined;
       if (!keyId || !tapKey) continue;
       activeTouchesRef.current.set(String(touch.identifier), keyId);
@@ -466,6 +484,14 @@ export function KeyboardLayout({
   };
 
   const handleBodyTouchEnd = (event: GestureResponderEvent) => {
+    const swipe = swipeRef.current;
+    if (swipe && event.nativeEvent.changedTouches.some(t => String(t.identifier) === swipe.touchId)) {
+      swipeRef.current = null;
+      trailRef.current?.clear();
+      if (swipe.active && event.type !== 'touchcancel') {
+        finishSwipe(swipe);
+      }
+    }
     for (const touch of event.nativeEvent.changedTouches) {
       if (activeTouchesRef.current.delete(String(touch.identifier))) {
         releaseKey();
@@ -478,6 +504,106 @@ export function KeyboardLayout({
     bodyRef.current?.measure((_x, _y, _width, _height, pageX, pageY) => {
       bodyOriginRef.current = {x: pageX, y: pageY};
     });
+  };
+
+  // --- Swipe typing ----------------------------------------------------
+  // A finger that lands on a letter is a swipe candidate; once it travels
+  // more than ~60% of a key's width it becomes a swipe. The letter its
+  // touch-down already typed is taken back, the path is collected (and
+  // drawn - SwipeTrail), and on lift it's decoded into a word against the
+  // same word list the suggestions use (services/swipeDecoder.ts).
+  // Latin-script layouts only: the decoder matches keys to letters of the
+  // word list, and the Hindi list's words don't spell out key by key.
+  const wordList = activeLocale === 'hi-IN' ? null : getWordList(activeLocale);
+  const swipeAvailable = swipeTypingEnabled && !!wordList;
+  const trailRef = useRef<SwipeTrailHandle>(null);
+  type SwipeState = {
+    touchId: string;
+    start: Point;
+    points: Point[];
+    keyWidth: number;
+    active: boolean;
+    // To undo the touch-down letter exactly when this turns into a swipe.
+    typedBefore: string;
+    shiftBefore: boolean;
+  };
+  const swipeRef = useRef<SwipeState | null>(null);
+
+  const isLetterKey = (keyDef: KeyDef | undefined) => !!keyDef && !keyDef.action && /^[a-zà-ÿ]$/i.test(keyDef.key);
+
+  const keyDefFor = (keyId: string): KeyDef | undefined => {
+    const match = /^(\d+)-(\d+)$/.exec(keyId);
+    return match ? layout.rows[Number(match[1])]?.[Number(match[2])] : undefined;
+  };
+
+  const maybeStartSwipe = (touchId: string, point: Point, keyId: string) => {
+    swipeRef.current = null;
+    if (!swipeAvailable || !isLetterKey(keyDefFor(keyId))) return;
+    const box = keyBoxes().find(candidate => candidate.keyId === keyId);
+    swipeRef.current = {
+      touchId,
+      start: point,
+      points: [point],
+      keyWidth: box?.width ?? 30,
+      active: false,
+      typedBefore: typedWord,
+      shiftBefore: isShiftActive,
+    };
+  };
+
+  const handleBodyTouchMove = (event: GestureResponderEvent) => {
+    const swipe = swipeRef.current;
+    if (!swipe) return;
+    const touch = event.nativeEvent.changedTouches.find(t => String(t.identifier) === swipe.touchId);
+    const point = touch ? bodyPoint(touch) : null;
+    if (!point) return;
+    if (!swipe.active) {
+      if (Math.hypot(point.x - swipe.start.x, point.y - swipe.start.y) < swipe.keyWidth * 0.6) return;
+      swipe.active = true;
+      // Take back the letter the touch-down typed - this is a swipe, and
+      // its first letter comes from the decoded word.
+      deleteBackward(1);
+      trackWord(swipe.typedBefore);
+      setShiftActive(swipe.shiftBefore);
+      releaseKey();
+      setNumberPreviewIndex(null);
+      if (swipeTypingTrailEnabled) trailRef.current?.start(swipe.start);
+    }
+    // Skip near-duplicate points - a finger reports far more moves than
+    // the decoder or the trail need.
+    const last = swipe.points[swipe.points.length - 1];
+    if (Math.hypot(point.x - last.x, point.y - last.y) < 3) return;
+    swipe.points.push(point);
+    if (swipeTypingTrailEnabled) trailRef.current?.add(point);
+  };
+
+  const finishSwipe = (swipe: SwipeState) => {
+    if (!wordList) return;
+    const centers: Record<string, Point> = {};
+    let widthSum = 0;
+    let keyCount = 0;
+    for (const box of keyBoxes()) {
+      const keyDef = keyDefFor(box.keyId);
+      if (!isLetterKey(keyDef)) continue;
+      centers[keyDef!.key.toLowerCase()] = {x: box.x + box.width / 2, y: box.y + box.height / 2};
+      widthSum += box.width;
+      keyCount++;
+    }
+    const words = decodeSwipe(swipe.points, centers, keyCount ? widthSum / keyCount : 0, wordList);
+    if (words.length === 0) return;
+    const capitalise = (word: string) => (swipe.shiftBefore ? word.charAt(0).toUpperCase() + word.slice(1) : word);
+    const [word, ...alternatives] = words.map(capitalise);
+    fireKeyFeedback();
+    // A swiped word right after another word (or a few typed letters) gets
+    // its separating space automatically, as in Gboard - the swiped word
+    // itself is left without one, so a suggestion chip can still swap it.
+    commitText((swipe.typedBefore ? ' ' : '') + word);
+    if (effectiveShowSuggestions) {
+      setSwipeResult(word, alternatives);
+    }
+    if (swipe.shiftBefore) setShiftActive(false);
+    pendingSentenceEndRef.current = false;
+    if (lastSuggestion) setLastSuggestion(null);
   };
 
   // --- Delete key: native HoldRepeatKeyView handlers --------------------
@@ -557,6 +683,8 @@ export function KeyboardLayout({
   };
 
   const handleNumberHintLongPress = (keyIndex: number) => {
+    // A swipe that started on this key isn't a hold.
+    if (swipeRef.current?.active) return;
     fireKeyFeedback();
     setNumberPreviewIndex(keyIndex);
     deleteBackward(1);
@@ -668,6 +796,7 @@ export function KeyboardLayout({
       ref={bodyRef}
       onLayout={handleBodyLayout}
       onTouchStart={handleBodyTouchStart}
+      onTouchMove={handleBodyTouchMove}
       onTouchEnd={handleBodyTouchEnd}
       onTouchCancel={handleBodyTouchEnd}
       style={[
@@ -904,6 +1033,7 @@ export function KeyboardLayout({
         </View>
         );
       })}
+      <SwipeTrail ref={trailRef} color={theme.accent} />
       {keyPreview}
     </View>
   );

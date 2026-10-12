@@ -112,6 +112,8 @@ export function SettingsPanel() {
     setKeySoundEnabled,
     swipeTypingTrailEnabled,
     setSwipeTypingTrailEnabled,
+    swipeTypingEnabled,
+    setSwipeTypingEnabled,
     layoutStyle,
     setLayoutStyle,
     keyboardSizeScale,
@@ -168,10 +170,18 @@ export function SettingsPanel() {
           accent={theme.accent}
         />
         <ToggleRow
-          label="Swipe typing trail"
+          label="Swipe typing"
+          value={swipeTypingEnabled}
+          onChange={setSwipeTypingEnabled}
+          note="Slide your finger across the letters to type a word. English and Spanish."
+          textColor={theme.keyText}
+          accent={theme.accent}
+        />
+        <ToggleRow
+          label="Show swipe trail"
           value={swipeTypingTrailEnabled}
           onChange={setSwipeTypingTrailEnabled}
-          note="Not yet available - there's no swipe-to-type gesture engine in this build yet, so this toggle doesn't change typing behavior."
+          note="Draws a line under your finger while you swipe."
           textColor={theme.keyText}
           accent={theme.accent}
         />

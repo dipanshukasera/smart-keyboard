@@ -82,6 +82,14 @@ export function useKeyPreview() {
     keyRectRef.current[keyId] = {row, x, width, height};
   };
 
+  // Every measured key's box in panel coordinates - the swipe decoder's
+  // map of where each letter is.
+  const keyBoxes = (): {keyId: string; x: number; y: number; width: number; height: number}[] =>
+    Object.entries(keyRectRef.current).flatMap(([keyId, rect]) => {
+      const top = rowTopRef.current[rect.row];
+      return top == null ? [] : [{keyId, x: rect.x, y: top, width: rect.width, height: rect.height}];
+    });
+
   // The key at (x, y) in panel coordinates, or null. Each key's box is
   // grown by `slop` on every side so a touch landing in the thin gap
   // between two keys still counts for the nearer one, instead of being
@@ -162,6 +170,7 @@ export function useKeyPreview() {
     trackRowLayout,
     trackKeyLayout,
     keyAt,
+    keyBoxes,
     renderPreview,
   };
 }

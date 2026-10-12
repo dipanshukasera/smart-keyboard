@@ -39,6 +39,12 @@ function ranksFor(locale: string): Map<string, number> {
   return cached;
 }
 
+// The frequency-ranked word list for `locale` (most common first), or null
+// if there isn't one - used by the swipe decoder.
+export function getWordList(locale: string): string[] | null {
+  return FREQUENCY_LISTS[locale] ?? null;
+}
+
 export function getSuggestions(locale: string, prefix: string, limit: number = 3): string[] {
   if (!prefix) return [];
   const words = FREQUENCY_LISTS[locale] ?? FREQUENCY_LISTS['en-GB'];
