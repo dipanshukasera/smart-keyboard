@@ -48,6 +48,8 @@ export default function App() {
     setSensitiveField,
     setNumericField,
     setLastSuggestion,
+    resetTypingSession,
+    setShiftActive,
     toolbarOrder,
     keyboardDimLevel,
     cycleKeyboardDim,
@@ -81,10 +83,28 @@ export default function App() {
       (event: {isPasswordField: boolean; isNumericField: boolean; allowDecimal: boolean; allowSign: boolean}) => {
         setSensitiveField(!!event?.isPasswordField);
         setNumericField(!!event?.isNumericField, !!event?.allowDecimal, !!event?.allowSign);
+        // Every field - including the same app's field after reopening the
+        // keyboard - starts with a fresh typing session: no word or
+        // suggestions carried over from wherever the keyboard was last.
+        resetTypingSession();
+        translation.resetSource();
       },
     );
     return () => subscription.remove();
-  }, [setSensitiveField, setNumericField]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setSensitiveField, setNumericField, resetTypingSession]);
+
+  // Emitted (ImeService.onUpdateSelection) whenever the cursor arrives at
+  // the very start of the field: the user deleted everything, selected all
+  // and deleted, or the app cleared the box after sending. Like Gboard,
+  // the next letter is then capitalised - and there's no word in progress.
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('onCursorAtStart', () => {
+      setShiftActive(true);
+      resetTypingSession();
+    });
+    return () => subscription.remove();
+  }, [setShiftActive, resetTypingSession]);
 
   // Emitted when the keyboard's view actually goes away (leaving the chat/
   // app, not just moving between fields within it - see ImeService's
@@ -95,9 +115,12 @@ export default function App() {
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('onKeyboardClosed', () => {
       setActivePanel('keyboard');
+      resetTypingSession();
+      translation.resetSource();
     });
     return () => subscription.remove();
-  }, [setActivePanel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setActivePanel, resetTypingSession]);
 
   // Gboard's clipboard icon opens a history panel (multiple recent
   // copies), not an instant single paste - capture whatever's on the

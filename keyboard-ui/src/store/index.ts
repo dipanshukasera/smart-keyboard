@@ -198,6 +198,11 @@ interface KeyboardState {
   setKeyboardSizeScale: (scale: number) => void;
   toggleShift: () => void;
   setShiftActive: (active: boolean) => void;
+  // Forget everything about what was being typed - the current word, its
+  // suggestions/emoji, the pending suggestion-undo - so a newly focused
+  // field (or the keyboard reopened, even in the same app) starts fresh.
+  // Clipboard history, learned words and settings are kept.
+  resetTypingSession: () => void;
   setTranslateSourceLocale: (locale: string | null) => void;
   setTranslateTargetLocale: (locale: string | null) => void;
   setToolbarExpanded: (expanded: boolean) => void;
@@ -313,6 +318,15 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   },
 
   toggleShift: () => set({isShiftActive: !get().isShiftActive}),
+
+  resetTypingSession: () =>
+    set({
+      typedWord: '',
+      suggestions: [],
+      emojiSuggestion: null,
+      lastSuggestion: null,
+      isToolbarExpanded: false,
+    }),
   setShiftActive: active => set({isShiftActive: active}),
 
   setTranslateSourceLocale: locale => {

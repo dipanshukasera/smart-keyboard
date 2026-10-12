@@ -76,6 +76,20 @@ public class ImeService extends InputMethodService {
         InputConnectionHolder.set(getCurrentInputConnection(), info);
     }
 
+    // Fires whenever the cursor or selection moves in the focused field -
+    // including after the keyboard's own edits. Only the "cursor now at the
+    // very start" case matters here (see KeyboardReactView.emitCursorAtStart).
+    @Override
+    public void onUpdateSelection(int oldSelStart, int oldSelEnd, int newSelStart, int newSelEnd,
+                                  int candidatesStart, int candidatesEnd) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd);
+        boolean nowAtStart = newSelStart == 0 && newSelEnd == 0;
+        boolean wasAtStart = oldSelStart == 0 && oldSelEnd == 0;
+        if (nowAtStart && !wasAtStart && keyboardReactView != null) {
+            keyboardReactView.emitCursorAtStart();
+        }
+    }
+
     @Override
     public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);

@@ -140,6 +140,21 @@ public class KeyboardReactView {
     // gets this for free from ReactActivityDelegate; an IME has to call it
     // itself, tied to the window's own visibility instead (see
     // ImeService's onWindowShown/onWindowHidden).
+    /**
+     * Tells JS the cursor is at the very start of the field - every way a
+     * field ends up empty (backspacing it all, select-all + delete, the app
+     * clearing it after sending) - so the next letter is capitalised.
+     */
+    void emitCursorAtStart() {
+        ReactContext reactContext = reactInstanceManager.getCurrentReactContext();
+        if (reactContext == null) {
+            return;
+        }
+        reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit("onCursorAtStart", null);
+    }
+
     void onResume() {
         reactInstanceManager.onHostResume(null);
     }

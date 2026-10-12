@@ -166,6 +166,15 @@ export function useTranslationPanel() {
     ? targetLanguages.find(l => l.language === translateTargetLocale)?.name ?? translateTargetLocale
     : 'Select language';
 
+  // Clears what was typed for translation - a new field or a reopened
+  // keyboard starts with an empty box rather than the last app's text.
+  const resetSource = () => {
+    setSourceText('');
+    setTranslatedText('');
+    setError(null);
+    setDetectedSourceCode(null);
+  };
+
   return {
     sourceText,
     translatedText,
@@ -186,6 +195,7 @@ export function useTranslationPanel() {
     appendToSource,
     deleteFromSource,
     replaceText,
+    resetSource,
   };
 }
 
