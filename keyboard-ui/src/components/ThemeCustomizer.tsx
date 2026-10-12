@@ -4,12 +4,22 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {BUILT_IN_THEMES} from '../themes/presets';
 import {ThemeCreator} from './ThemeCreator';
+import {KeyShape, keyDecor} from '../themes/keyStyle';
 
-// Themes only: built-in presets, custom themes, and creating a new one.
-// Every other preference (layout, size, one-handed, privacy, content) is
-// in SettingsPanel.
+const SHAPES: {value: KeyShape; label: string}[] = [
+  {value: 'rounded', label: 'Rounded'},
+  {value: 'square', label: 'Square'},
+  {value: 'bubble', label: 'Bubble'},
+];
+
+// Looks: built-in presets, custom themes, creating a new one, and the key
+// style (shape/outline/3D/bold) that applies on top of whichever theme is
+// chosen. Every other preference (layout, size, one-handed, privacy,
+// content) is in SettingsPanel.
 export function ThemeCustomizer() {
-  const {theme, setTheme, customThemes, deleteCustomTheme, setActivePanel} = useKeyboardStore();
+  const {theme, setTheme, customThemes, deleteCustomTheme, setActivePanel, keyStyle, setKeyStyle} =
+    useKeyboardStore();
+  const decor = keyDecor(keyStyle, theme);
   const [showCreator, setShowCreator] = useState(false);
 
   if (showCreator) {
@@ -18,7 +28,9 @@ export function ThemeCustomizer() {
 
   return (
     <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
-      <ScrollView>
+      {/* Bounded so the screen scrolls instead of growing past the
+          keyboard window's height cap and clipping the bottom off. */}
+      <ScrollView style={styles.scroll}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {BUILT_IN_THEMES.map(preset => (
             <TouchableOpacity
@@ -61,6 +73,55 @@ export function ThemeCustomizer() {
           <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Long-press a custom theme to delete it</Text>
         )}
 
+        <Text style={[styles.sectionLabel, {color: theme.keyText + '99'}]}>KEY STYLE</Text>
+        {/* The keyboard itself is hidden behind this screen, so a few keys
+            drawn with the current theme + style show the effect live. */}
+        <View style={[styles.previewRow, {backgroundColor: theme.panelBackground}]}>
+          {['Q', 'W', 'E', 'R', 'T', 'Y'].map(letter => (
+            <View
+              key={letter}
+              style={[styles.previewKey, decor.key, {backgroundColor: theme.keyBackground}]}>
+              <Text style={{color: theme.keyText, fontSize: 15, fontWeight: decor.labelWeight}}>{letter}</Text>
+            </View>
+          ))}
+          <View style={[styles.previewKey, decor.key, {borderRadius: decor.accentRadius, backgroundColor: theme.accent}]}>
+            <Icon name="keyboard-return" size={18} color="#FFFFFF" />
+          </View>
+        </View>
+        <View style={styles.optionRow}>
+          {SHAPES.map(shape => {
+            const selected = keyStyle.shape === shape.value;
+            return (
+              <TouchableOpacity
+                key={shape.value}
+                style={[styles.option, {backgroundColor: selected ? theme.accent : theme.keyBackground}]}
+                onPress={() => setKeyStyle({shape: shape.value})}>
+                <Text style={{color: selected ? '#FFFFFF' : theme.keyText, fontSize: 12}}>{shape.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <View style={styles.optionRow}>
+          {(
+            [
+              {field: 'outline', label: 'Outline', icon: 'crop-square'},
+              {field: 'raised', label: '3D keys', icon: 'layers'},
+              {field: 'boldLabels', label: 'Bold letters', icon: 'format-bold'},
+            ] as const
+          ).map(option => {
+            const on = keyStyle[option.field];
+            return (
+              <TouchableOpacity
+                key={option.field}
+                style={[styles.option, {backgroundColor: on ? theme.accent : theme.keyBackground}]}
+                onPress={() => setKeyStyle({[option.field]: !on})}>
+                <Icon name={option.icon} size={14} color={on ? '#FFFFFF' : theme.keyText} />
+                <Text style={{color: on ? '#FFFFFF' : theme.keyText, fontSize: 12, marginLeft: 4}}>{option.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
       </ScrollView>
 
       <TouchableOpacity style={styles.doneButton} onPress={() => setActivePanel('keyboard')}>
@@ -74,6 +135,9 @@ const styles = StyleSheet.create({
   container: {
     padding: 10,
   },
+  scroll: {
+    maxHeight: 330,
+  },
   swatch: {
     width: 90,
     height: 90,
@@ -85,6 +149,40 @@ const styles = StyleSheet.create({
   },
   createSwatch: {
     borderStyle: 'dashed',
+  },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    borderRadius: 8,
+  },
+  previewKey: {
+    flex: 1,
+    height: 40,
+    marginHorizontal: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 6,
   },
   hint: {
     fontSize: 11,

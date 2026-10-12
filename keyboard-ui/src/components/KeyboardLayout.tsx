@@ -22,6 +22,7 @@ import type {KeyDef, LayoutDef} from '../layouts/types';
 import {buildStyledLayout} from '../layouts/layoutStyles';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
 import {useKeyPreview} from '../hooks/useKeyPreview';
+import {keyDecor} from '../themes/keyStyle';
 
 // A full row of digit keys shown above the top letter row when the
 // "Number row" setting is on - distinct from NUMBER_HINTS below (the
@@ -158,6 +159,7 @@ export function KeyboardLayout({
     hapticFeedbackEnabled,
     keySoundEnabled,
     keyFontFamily,
+    keyStyle,
   } = useKeyboardStore();
   const lastSpaceTimeRef = useRef(0);
   // Auto-capitalization, mid-sentence case: set by commitChar whenever the
@@ -251,6 +253,9 @@ export function KeyboardLayout({
   // See styles.pressOverlay - a translucent wash that reads as "pressed"
   // regardless of which theme's specific key/pressed-background pair is
   // active, rather than relying on that pair alone being visibly distinct.
+  // Shape/outline/3D/bold from the user's key style (see themes/keyStyle.ts).
+  const decor = keyDecor(keyStyle, theme);
+
   const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
   const commitText = (text: string) => {
@@ -684,6 +689,7 @@ export function KeyboardLayout({
               pointerEvents="none"
               style={[
                 styles.key,
+                decor.key,
                 {
                   flex: 1,
                   backgroundColor: pressedKeyId === `numrow-${index}` ? theme.keyPressedBackground : theme.keyBackground,
@@ -691,11 +697,14 @@ export function KeyboardLayout({
                 },
               ]}
               onLayout={trackKeyLayout(`numrow-${index}`, 'numrow')}>
-              <Text style={{color: theme.keyText, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
+              <Text style={{color: theme.keyText, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
                 {digit}
               </Text>
               {pressedKeyId === `numrow-${index}` && (
-                <View pointerEvents="none" style={[styles.pressOverlay, {backgroundColor: pressOverlayColor}]} />
+                <View
+                  pointerEvents="none"
+                  style={[styles.pressOverlay, {borderRadius: decor.radius, backgroundColor: pressOverlayColor}]}
+                />
               )}
             </View>
             );
@@ -761,8 +770,7 @@ export function KeyboardLayout({
                 pointerEvents="none"
                 style={[
                   styles.pressOverlay,
-                  isPill && styles.pressOverlayPill,
-                  isAccent && styles.pressOverlayAccent,
+                  {borderRadius: isPill ? decor.pillRadius : isAccent ? decor.accentRadius : decor.radius},
                   {backgroundColor: pressOverlayColor},
                 ]}
               />
@@ -791,6 +799,7 @@ export function KeyboardLayout({
                   onPressEnd={handleDeletePressEnd}
                   style={[
                     styles.key,
+                    decor.key,
                     {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                   ]}>
                   {dragDeleteCount > 0 ? (
@@ -816,6 +825,7 @@ export function KeyboardLayout({
                   key={`${rowIndex}-${keyIndex}`}
                   style={[
                     styles.key,
+                    decor.key,
                     {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                   ]}
                   {...spacePanResponder.panHandlers}>
@@ -842,8 +852,9 @@ export function KeyboardLayout({
                   onPressEnd={handleNumberHintPressEnd}
                   style={[
                     styles.key,
-                    isPill && styles.pillKey,
-                    isAccent && styles.accentKey,
+                    decor.key,
+                    isPill && {borderRadius: decor.pillRadius},
+                    isAccent && {borderRadius: decor.accentRadius},
                     {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                   ]}>
                   <Text style={[styles.numberHint, {color: theme.keyText, fontSize: 10 * keyboardSizeScale}]}>
@@ -852,7 +863,7 @@ export function KeyboardLayout({
                   {iconName ? (
                     <Icon name={iconName} size={keyIconSize} color={textColor} />
                   ) : (
-                    <Text style={{color: textColor, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
+                    <Text style={{color: textColor, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
                       {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                     </Text>
                   )}
@@ -872,15 +883,16 @@ export function KeyboardLayout({
                 pointerEvents="none"
                 style={[
                   styles.key,
-                  isPill && styles.pillKey,
-                  isAccent && styles.accentKey,
+                  decor.key,
+                  isPill && {borderRadius: decor.pillRadius},
+                  isAccent && {borderRadius: decor.accentRadius},
                   {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                 ]}
                 onLayout={trackKeyLayout(keyId, String(rowIndex))}>
                 {iconName ? (
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (
-                  <Text style={{color: textColor, fontSize: keyFontSize, fontFamily: keyFontFamily ?? undefined}}>
+                  <Text style={{color: textColor, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
                     {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                   </Text>
                 )}
@@ -936,17 +948,11 @@ const styles = StyleSheet.create({
   },
   key: {
     marginHorizontal: 2,
-    // 13px per the "Keyboard Toolbar Explorations" design board (was 6).
-    borderRadius: 13,
+    // Corner radius comes from the key style (themes/keyStyle.ts) -
+    // 13px by default, per the "Keyboard Toolbar Explorations" board.
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-  },
-  pillKey: {
-    borderRadius: 20,
-  },
-  accentKey: {
-    borderRadius: 24,
   },
   // A clearly-visible press highlight on top of the resting-state
   // backgroundColor swap above - that swap alone (theme.keyPressedBackground)
@@ -962,12 +968,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 13,
-  },
-  pressOverlayPill: {
-    borderRadius: 20,
-  },
-  pressOverlayAccent: {
-    borderRadius: 24,
   },
   numberHint: {
     position: 'absolute',

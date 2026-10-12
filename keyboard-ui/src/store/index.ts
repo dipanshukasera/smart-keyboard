@@ -4,6 +4,7 @@ import {defaultTheme} from '../themes/default';
 import {ThemeStorage} from '../native-bridge/ThemeStorage';
 import {getSuggestions, getSpellingCorrection} from '../services/dictionary';
 import {getEmojiSuggestion} from '../data/emojiKeywords';
+import {DEFAULT_KEY_STYLE, KeyStyle} from '../themes/keyStyle';
 import type {LayoutStyle} from '../layouts/layoutStyles';
 
 export type PanelType =
@@ -69,6 +70,7 @@ const TRANSLATE_TARGET_LOCALE_KEY = 'translate_target_locale';
 const ADULT_GIFS_ENABLED_KEY = 'adult_gifs_enabled';
 const NUMBER_ROW_ENABLED_KEY = 'number_row_enabled';
 const HINGLISH_ENABLED_KEY = 'hinglish_enabled';
+const KEY_STYLE_KEY = 'key_style';
 const HAPTIC_FEEDBACK_ENABLED_KEY = 'haptic_feedback_enabled';
 const KEY_SOUND_ENABLED_KEY = 'key_sound_enabled';
 // Persisted and shown as a real toggle (see SettingsPanel), but there is no
@@ -150,6 +152,8 @@ interface KeyboardState {
   // form of the current word as a suggestion ("namaste" -> नमस्ते). See
   // App.tsx's transliteration lookup.
   hinglishEnabled: boolean;
+  // Key shape/outline/3D/bold - see themes/keyStyle.ts.
+  keyStyle: KeyStyle;
   // Real: a short Vibration.vibrate() on every key press when on.
   hapticFeedbackEnabled: boolean;
   // Real: plays Android's built-in keypress click sound (see
@@ -206,6 +210,7 @@ interface KeyboardState {
   setLastSuggestion: (value: LastSuggestion | null) => void;
   setNumberRowEnabled: (value: boolean) => void;
   setHinglishEnabled: (value: boolean) => void;
+  setKeyStyle: (patch: Partial<KeyStyle>) => void;
   setHapticFeedbackEnabled: (value: boolean) => void;
   setKeySoundEnabled: (value: boolean) => void;
   setSwipeTypingTrailEnabled: (value: boolean) => void;
@@ -244,6 +249,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   lastSuggestion: null,
   numberRowEnabled: false,
   hinglishEnabled: true,
+  keyStyle: DEFAULT_KEY_STYLE,
   hapticFeedbackEnabled: true,
   keySoundEnabled: false,
   swipeTypingTrailEnabled: true,
@@ -464,6 +470,12 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(HINGLISH_ENABLED_KEY, value);
   },
 
+  setKeyStyle: patch => {
+    const keyStyle = {...get().keyStyle, ...patch};
+    set({keyStyle});
+    ThemeStorage.saveJSON(KEY_STYLE_KEY, keyStyle);
+  },
+
   setHapticFeedbackEnabled: value => {
     set({hapticFeedbackEnabled: value});
     ThemeStorage.saveJSON(HAPTIC_FEEDBACK_ENABLED_KEY, value);
@@ -520,6 +532,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       toolbarOrder,
       keyboardDimLevel,
       hinglishEnabled,
+      keyStyle,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -542,6 +555,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<ToolId[]>(TOOLBAR_ORDER_KEY, ALL_TOOL_IDS),
       ThemeStorage.loadJSON<number>(KEYBOARD_DIM_LEVEL_KEY, 0),
       ThemeStorage.loadJSON<boolean>(HINGLISH_ENABLED_KEY, true),
+      ThemeStorage.loadJSON<KeyStyle>(KEY_STYLE_KEY, DEFAULT_KEY_STYLE),
     ]);
     set({
       // English switched from US to UK spelling (en-US -> en-GB); a saved
@@ -570,6 +584,9 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       toolbarOrder: reconcileToolbarOrder(toolbarOrder),
       keyboardDimLevel,
       hinglishEnabled,
+      // Merged over the defaults so a style saved by an older build (fewer
+      // fields) still gets every option.
+      keyStyle: {...DEFAULT_KEY_STYLE, ...keyStyle},
     });
   },
 }));
