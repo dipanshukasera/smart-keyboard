@@ -8,6 +8,11 @@ import androidx.core.content.FileProvider;
 import androidx.core.view.inputmethod.EditorInfoCompat;
 import androidx.core.view.inputmethod.InputConnectionCompat;
 import androidx.core.view.inputmethod.InputContentInfoCompat;
+import com.facebook.binaryresource.BinaryResource;
+import com.facebook.cache.common.CacheKey;
+import com.facebook.imagepipeline.cache.DefaultCacheKeyFactory;
+import com.facebook.imagepipeline.core.ImagePipelineFactory;
+import com.facebook.imagepipeline.request.ImageRequest;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -201,6 +206,14 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
         if (outFile.exists()) {
             return outFile;
         }
+        // The GIF grid shows each result through React Native's <Image>
+        // (Fresco), which has usually already downloaded this exact URL to
+        // its own disk cache. Copying those bytes locally takes a few ms;
+        // fetching them again was the whole of the delay between tapping a
+        // GIF and it arriving in the chat.
+        if (copyFromImageCache(remoteUrl, outFile)) {
+            return outFile;
+        }
 
         HttpURLConnection connection = (HttpURLConnection) new URL(remoteUrl).openConnection();
         connection.setConnectTimeout(10000);
@@ -233,6 +246,45 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
             throw new Exception("Couldn't move downloaded file into the cache");
         }
         return outFile;
+    }
+
+    /**
+     * Copies `remoteUrl`'s bytes out of Fresco's disk cache into `outFile`, if
+     * Fresco has them. Best-effort: any miss or failure returns false and
+     * the caller downloads as usual.
+     */
+    private boolean copyFromImageCache(String remoteUrl, File outFile) {
+        File partFile = new File(outFile.getPath() + ".part");
+        try {
+            if (!ImagePipelineFactory.hasBeenInitialized()) {
+                return false;
+            }
+            CacheKey key = DefaultCacheKeyFactory.getInstance()
+                    .getEncodedCacheKey(ImageRequest.fromUri(remoteUrl), null);
+            ImagePipelineFactory pipeline = ImagePipelineFactory.getInstance();
+            BinaryResource resource = pipeline.getMainFileCache().getResource(key);
+            if (resource == null) {
+                resource = pipeline.getSmallImageFileCache().getResource(key);
+            }
+            if (resource == null) {
+                return false;
+            }
+            try (InputStream in = resource.openStream();
+                 FileOutputStream out = new FileOutputStream(partFile)) {
+                byte[] buffer = new byte[16384];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+            }
+            if (partFile.renameTo(outFile)) {
+                return true;
+            }
+        } catch (Exception e) {
+            // Fall through to a normal download.
+        }
+        partFile.delete();
+        return false;
     }
 
     private String sha1(String input) throws Exception {

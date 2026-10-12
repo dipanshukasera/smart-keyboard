@@ -447,8 +447,13 @@ export function GifStickerPanel() {
         }
       }
     }
-    if (!sentUrl && (await GifCommit.commitGif(gif.fullUrl))) {
-      sentUrl = gif.fullUrl;
+    // GIFs and stickers send the preview-size file the grid has already
+    // downloaded, so a tap sends in milliseconds (GifCommitModule copies it
+    // out of the image cache) - the full-size file is 0.5-10MB and had to be
+    // fetched on every tap. 18+ falls back to its still frame here.
+    const stillUrl = gif.videoUrl ? gif.fullUrl : gif.previewUrl;
+    if (!sentUrl && (await GifCommit.commitGif(stillUrl))) {
+      sentUrl = stillUrl;
     }
     if (sentUrl) {
       showFeedback('Sent!');
@@ -458,17 +463,18 @@ export function GifStickerPanel() {
     }
     // A converted GIF is already sitting in the native download cache, so
     // the recents entry can be the animation rather than the still frame.
-    cacheForOffline(gif, sentUrl && sentUrl !== gif.videoUrl ? sentUrl : gif.fullUrl);
+    cacheForOffline(gif, sentUrl && sentUrl !== gif.videoUrl ? sentUrl : stillUrl);
   };
 
   // "Used" (searched-for and tapped, not merely scrolled past) is the
   // trigger for offline availability - caching every thumbnail just from
   // browsing would download far more than anyone will ever revisit.
   const cacheForOffline = async (gif: GifResult, fullUrl: string) => {
-    const [previewUri, fullUri] = await Promise.all([
-      GifCommit.cacheGif(gif.previewUrl),
-      GifCommit.cacheGif(fullUrl),
-    ]);
+    // GIFs and stickers now send the preview file itself, so both are the
+    // same URL - cache it once rather than twice in parallel (two copies of
+    // the same file racing each other made one fall back to the network).
+    const previewUri = await GifCommit.cacheGif(gif.previewUrl);
+    const fullUri = fullUrl === gif.previewUrl ? previewUri : await GifCommit.cacheGif(fullUrl);
     if (previewUri && fullUri) {
       addRecentGif({id: gif.id, previewUri, fullUri, timestamp: Date.now()});
     }
