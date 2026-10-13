@@ -29,13 +29,14 @@ async function searchTenor(query, limit, page = 1) {
       q: query,
       key: process.env.TENOR_API_KEY,
       limit,
-      media_filter: 'tinygif,gif',
+      media_filter: 'tinygif,gif,mp4',
     },
   });
   return response.data.results.map(item => ({
     id: item.id,
     previewUrl: item.media_formats.tinygif.url,
     fullUrl: item.media_formats.gif.url,
+    mp4Url: item.media_formats.mp4?.url ?? null,
   }));
 }
 
@@ -73,11 +74,25 @@ function firstAvailableUrl(file, tierOrder) {
   return null;
 }
 
+// The same clip as an mp4, from the first tier that has one. Apps that
+// refuse GIFs from keyboards (Instagram) can still take it as a video, via
+// their own share screen. Taken from the API rather than derived from the
+// GIF's URL: swapping the extension on a Klipy URL returns a "content no
+// longer available" placeholder, not the clip.
+function firstAvailableMp4(file, tierOrder) {
+  for (const tier of tierOrder) {
+    const url = file?.[tier]?.mp4?.url;
+    if (url) return url;
+  }
+  return null;
+}
+
 function mapKlipyItem(item) {
   return {
     id: String(item.id),
     previewUrl: firstAvailableUrl(item.file, ['sm', 'xs', 'md', 'hd']),
     fullUrl: firstAvailableUrl(item.file, ['md', 'hd', 'sm', 'xs']),
+    mp4Url: firstAvailableMp4(item.file, ['md', 'sm', 'hd', 'xs']),
   };
 }
 

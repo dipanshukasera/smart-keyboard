@@ -1,6 +1,9 @@
 package com.yourco.keyboard;
 
+import android.content.ClipData;
 import android.content.ClipDescription;
+import android.content.ComponentName;
+import android.content.Intent;
 import android.net.Uri;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -49,6 +52,48 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void isRichContentSupported(Promise promise) {
         promise.resolve(currentFieldAcceptsGif());
+    }
+
+    // Package of the app whose field is focused, or null - lets JS route
+    // sends for apps that need special handling (see shareVideoToInstagram).
+    @ReactMethod
+    public void focusedPackage(Promise promise) {
+        EditorInfo info = InputConnectionHolder.editorInfo();
+        promise.resolve(info != null ? info.packageName : null);
+    }
+
+    // Instagram plays nothing a keyboard puts in its message box: GIFs are
+    // refused, videos silently dropped, images arrive frozen. The one way a
+    // keyboard's GIF arrives moving is as a video message, sent through
+    // Instagram's own "share to chats" screen - so this downloads the clip's
+    // mp4 and opens that screen with it; the user picks the chat and taps
+    // Send. It arrives as a tap-to-play video. Read access to the one file
+    // is granted on the intent, so Instagram needs no storage permission.
+    @ReactMethod
+    public void shareVideoToInstagram(String videoUrl, Promise promise) {
+        new Thread(() -> {
+            try {
+                File video = downloadToCache(videoUrl);
+                Uri uri = FileProvider.getUriForFile(
+                        getReactApplicationContext(),
+                        getReactApplicationContext().getPackageName() + ".fileprovider",
+                        video);
+                Intent share = new Intent(Intent.ACTION_SEND);
+                share.setType("video/mp4");
+                share.putExtra(Intent.EXTRA_STREAM, uri);
+                share.setClipData(ClipData.newRawUri("", uri));
+                share.setComponent(new ComponentName(
+                        "com.instagram.android",
+                        "com.instagram.direct.share.handler.DirectExternalMediaShareActivityVideo"));
+                share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                getReactApplicationContext().startActivity(share);
+                promise.resolve(true);
+            } catch (Exception e) {
+                // No Instagram, an older version without this screen, or the
+                // download failed - the caller falls back to a still image.
+                promise.resolve(false);
+            }
+        }).start();
     }
 
     // Whether the focused field would accept this URL's content type (video

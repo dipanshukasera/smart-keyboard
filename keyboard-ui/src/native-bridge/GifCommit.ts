@@ -3,6 +3,8 @@ import {NativeModules} from 'react-native';
 interface GifCommitNative {
   isRichContentSupported(): Promise<boolean>;
   acceptsUrl(remoteUrl: string): Promise<boolean>;
+  focusedPackage(): Promise<string | null>;
+  shareVideoToInstagram(videoUrl: string): Promise<boolean>;
   commitGif(remoteUrl: string): Promise<boolean>;
   cacheGif(remoteUrl: string): Promise<string>;
 }
@@ -17,6 +19,27 @@ export const GifCommit = {
   async isRichContentSupported(): Promise<boolean> {
     if (!native) return false;
     return native.isRichContentSupported();
+  },
+
+  // Package name of the app being typed into, or null.
+  async focusedPackage(): Promise<string | null> {
+    if (!native) return null;
+    try {
+      return await native.focusedPackage();
+    } catch {
+      return null;
+    }
+  },
+
+  // Opens Instagram's "share to chats" screen with this mp4 (see
+  // GifCommitModule.shareVideoToInstagram). False if that couldn't open.
+  async shareVideoToInstagram(videoUrl: string): Promise<boolean> {
+    if (!native) return false;
+    try {
+      return await native.shareVideoToInstagram(videoUrl);
+    } catch {
+      return false;
+    }
   },
 
   // Whether the focused field would accept this URL's content (an mp4 needs

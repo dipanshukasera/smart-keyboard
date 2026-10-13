@@ -29,7 +29,12 @@ interface GifResult {
   // only come from an mp4. Absent for GIF/sticker results, which are
   // animated images that <Image> handles directly.
   videoUrl?: string | null;
+  // The same GIF as an mp4 (Klipy/Tenor). Only used for Instagram, which
+  // refuses GIFs from keyboards but takes a video through its share screen.
+  mp4Url?: string | null;
 }
+
+const INSTAGRAM = 'com.instagram.android';
 
 // 'adult' is only reachable when the user has switched "Adult GIFs (18+)"
 // on in the settings panel - its tab isn't rendered otherwise, and it maps
@@ -410,7 +415,18 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   // 0.5-10MB). 18+ items are mp4 (Redgifs has no GIF), and far fewer fields
   // accept video than images: the mp4 where the field takes video, else a
   // real .gif converted from it on the backend, else the still frame.
+  //
+  // Instagram is the exception: it refuses GIFs and videos a keyboard puts
+  // in its message box, and a GIF sent as an image arrives frozen. A GIF or
+  // 18+ clip there goes as its mp4, through Instagram's own "share to
+  // chats" screen (see selectGif) - it arrives as a tap-to-play video.
+  // Stickers stay still images there: as video they'd lose their
+  // transparent background.
   const sendUrlFor = async (gif: GifResult): Promise<string> => {
+    const video = gif.mp4Url ?? gif.videoUrl;
+    if (video && contentType !== 'sticker' && (await GifCommit.focusedPackage()) === INSTAGRAM) {
+      return video;
+    }
     if (!gif.videoUrl) return gif.previewUrl;
     if (await GifCommit.acceptsUrl(gif.videoUrl)) return gif.videoUrl;
     if (await GifCommit.isRichContentSupported()) return convertedGifUrl(gif.videoUrl);
@@ -424,7 +440,16 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     // back to its still frame, and only then to copying a link.
     const stillUrl = gif.videoUrl ? gif.fullUrl : gif.previewUrl;
     const url = await sendUrlFor(gif);
-    let sentUrl: string | null = (await GifCommit.commitGif(url)) ? url : null;
+    const viaInstagramShare = url === (gif.mp4Url ?? gif.videoUrl) && (await GifCommit.focusedPackage()) === INSTAGRAM;
+    // Instagram's mp4 route: open its share screen, where the user picks
+    // the chat. If that can't open, go straight to the still image -
+    // committing the video to Instagram's box would "succeed" and send
+    // nothing.
+    if (viaInstagramShare && (await GifCommit.shareVideoToInstagram(url))) {
+      cacheForOffline(gif, stillUrl);
+      return;
+    }
+    let sentUrl: string | null = !viaInstagramShare && (await GifCommit.commitGif(url)) ? url : null;
     if (!sentUrl && url !== stillUrl && (await GifCommit.commitGif(stillUrl))) {
       sentUrl = stillUrl;
     }
