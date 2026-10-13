@@ -125,6 +125,9 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   const [previewItem, setPreviewItem] = useState<GifResult | null>(null);
   const [previewReady, setPreviewReady] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
+  // Which of the preview's two send buttons is in progress (shows a
+  // spinner and disables both), or null.
+  const [previewSending, setPreviewSending] = useState<'gif' | 'video' | null>(null);
   const {height: windowHeight} = useWindowDimensions();
   const gridMaxHeight = Math.max(MIN_GRID_HEIGHT_DP, windowHeight * WINDOW_HEIGHT_FRACTION - PANEL_CHROME_DP);
   const [results, setResults] = useState<GifResult[]>([]);
@@ -375,22 +378,52 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       setPreviewReady(false);
       setPreviewFailed(false);
       setPreviewItem(item);
-      // Start fetching the exact file Send will use while the preview plays
-      // - for a converted GIF that also starts the conversion on the server.
-      // By the time Send is tapped it's usually already on the phone, and a
-      // Send mid-download waits for this one instead of starting another
-      // (see GifCommitModule's per-URL lock).
-      sendUrlFor(item).then(url => GifCommit.cacheGif(url));
+      // Start getting both of the preview's sends ready while it plays -
+      // downloading the video, and having the backend convert the GIF
+      // (the slow part, several seconds). Whichever button is tapped is
+      // then usually already on the phone; a tap mid-download waits for
+      // this one rather than starting another (GifCommitModule's per-URL
+      // lock).
+      GifCommit.cacheGif(item.videoUrl);
+      GifCommit.cacheGif(convertedGifUrl(item.videoUrl));
     } else {
       selectGif(item);
     }
   };
 
-  const sendPreview = () => {
-    if (!previewItem) return;
+  // The 18+ preview's "Send GIF" / "Send video". The preview stays open
+  // with a spinner on the tapped button until the send finishes.
+  const sendPreviewAs = async (kind: 'gif' | 'video') => {
     const item = previewItem;
-    setPreviewItem(null);
-    selectGif(item);
+    if (!item?.videoUrl || previewSending) return;
+    setPreviewSending(kind);
+    try {
+      let sent: boolean;
+      if (kind === 'video') {
+        // Instagram takes video only through its share screen (see
+        // GifCommitModule.shareVideoToInstagram).
+        sent =
+          (await GifCommit.focusedPackage()) === INSTAGRAM
+            ? await GifCommit.shareVideoToInstagram(item.videoUrl)
+            : await GifCommit.commitGif(item.videoUrl);
+        if (!sent) {
+          // Say so rather than quietly sending something else - the GIF
+          // button is right there.
+          showFeedback('This app doesn’t take videos - try Send GIF');
+          return;
+        }
+      } else {
+        sent = await GifCommit.commitGif(convertedGifUrl(item.videoUrl));
+        if (!sent && !(await GifCommit.commitGif(item.fullUrl))) {
+          ClipboardModule?.setClipboardText(item.videoUrl);
+          showFeedback('This app doesn’t accept images directly - link copied, paste it instead');
+        }
+      }
+      cacheForOffline(item, kind === 'gif' && sent ? convertedGifUrl(item.videoUrl) : item.fullUrl);
+      setPreviewItem(null);
+    } finally {
+      setPreviewSending(null);
+    }
   };
 
   // Recents are kept per panel. Entries record which panel sent them;
@@ -634,10 +667,30 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
           <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewItem(null)}>
             <Icon name="close" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.previewSend, {backgroundColor: theme.accent}]} onPress={sendPreview}>
-            <Icon name="send" size={16} color="#FFFFFF" />
-            <Text style={styles.previewSendText}>Send</Text>
-          </TouchableOpacity>
+          <View style={styles.previewSendRow}>
+            {(
+              [
+                {kind: 'gif', label: 'Send GIF', icon: 'gif'},
+                {kind: 'video', label: 'Send video', icon: 'videocam'},
+              ] as const
+            ).map(button => (
+              <TouchableOpacity
+                key={button.kind}
+                disabled={!!previewSending}
+                style={[
+                  styles.previewSend,
+                  {backgroundColor: theme.accent, opacity: previewSending && previewSending !== button.kind ? 0.5 : 1},
+                ]}
+                onPress={() => sendPreviewAs(button.kind)}>
+                {previewSending === button.kind ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Icon name={button.icon} size={18} color="#FFFFFF" />
+                )}
+                <Text style={styles.previewSendText}>{button.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       ) : selectedTag === RECENT_TAG ? (
         tabRecents.length === 0 ? (
@@ -931,9 +984,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  previewSend: {
+  previewSendRow: {
     position: 'absolute',
     bottom: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  previewSend: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 18,
