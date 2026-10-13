@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   DeviceEventEmitter,
   findNodeHandle,
@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {useShallow} from 'zustand/react/shallow';
 import {useKeyboardStore} from '../store';
 import {InputConnection, ImeAction} from '../native-bridge/InputConnection';
 import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
@@ -132,13 +133,19 @@ function actionIconName(keyDef: KeyDef, enterIconName: string): string | null {
   }
 }
 
-export function KeyboardLayout({
+function KeyboardLayoutImpl({
   onCommitText,
   onDeleteBackward,
   onEnter,
   showSuggestions = true,
   compact = false,
 }: KeyboardLayoutProps = {}) {
+  // Only what this component draws (or passes on as stable setters). The
+  // word being typed and the pending suggestion-undo change on every
+  // keystroke but are only needed inside key handlers, so they're read
+  // fresh from the store at that moment (currentTypedWord/
+  // currentLastSuggestion) - subscribing to them re-rendered the whole
+  // keyboard on every letter, which is what made fast typing lag.
   const {
     activeLocale,
     theme,
@@ -146,13 +153,11 @@ export function KeyboardLayout({
     toggleShift,
     setShiftActive,
     setActivePanel,
-    typedWord,
     updateTypedWord,
     learnWord,
     oneHandedMode,
     setOneHandedMode,
     isSensitiveField,
-    lastSuggestion,
     setLastSuggestion,
     keyboardSizeScale,
     numberRowEnabled,
@@ -161,7 +166,31 @@ export function KeyboardLayout({
     swipeTypingEnabled,
     swipeTypingTrailEnabled,
     setSwipeResult,
-  } = useKeyboardStore();
+  } = useKeyboardStore(
+    useShallow(state => ({
+      activeLocale: state.activeLocale,
+      theme: state.theme,
+      isShiftActive: state.isShiftActive,
+      toggleShift: state.toggleShift,
+      setShiftActive: state.setShiftActive,
+      setActivePanel: state.setActivePanel,
+      updateTypedWord: state.updateTypedWord,
+      learnWord: state.learnWord,
+      oneHandedMode: state.oneHandedMode,
+      setOneHandedMode: state.setOneHandedMode,
+      isSensitiveField: state.isSensitiveField,
+      setLastSuggestion: state.setLastSuggestion,
+      keyboardSizeScale: state.keyboardSizeScale,
+      numberRowEnabled: state.numberRowEnabled,
+      keyFontFamily: state.keyFontFamily,
+      keyStyle: state.keyStyle,
+      swipeTypingEnabled: state.swipeTypingEnabled,
+      swipeTypingTrailEnabled: state.swipeTypingTrailEnabled,
+      setSwipeResult: state.setSwipeResult,
+    })),
+  );
+  const currentTypedWord = () => useKeyboardStore.getState().typedWord;
+  const currentLastSuggestion = () => useKeyboardStore.getState().lastSuggestion;
   const lastSpaceTimeRef = useRef(0);
   // Auto-capitalization, mid-sentence case: set by commitChar whenever the
   // most recently typed character was a sentence-ender (. ! ?), consumed
@@ -175,14 +204,14 @@ export function KeyboardLayout({
   // selected-for-deletion (backspace) or how many steps the cursor has
   // moved (spacebar) - 0 means no drag gesture in progress.
   const [dragDeleteCount, setDragDeleteCount] = useState(0);
-  // Which key (by "row-col" id) is currently pressed, for a visible
-  // highlight while held, plus the Gboard-style preview bubble above it -
-  // see useKeyPreview (shared with SymbolsNumberPanel).
+  // The pressed key's highlight and the Gboard-style preview bubble above
+  // it - see useKeyPreview (shared with SymbolsNumberPanel). Press state
+  // lives in that hook's own store, so a press never re-renders the keys.
   const {
-    pressedKeyId,
-    setPressedKeyId,
     pressKey,
     releaseKey,
+    clearPress,
+    setPreviewOverride,
     onBodyLayout,
     trackRowLayout,
     trackKeyLayout,
@@ -190,12 +219,6 @@ export function KeyboardLayout({
     keyBoxes,
     renderPreview,
   } = useKeyPreview();
-  // Which top-row key index is currently showing its number in an enlarged
-  // popup above the key - Gboard shows this the moment the long-press
-  // fires (not just silently swapping in the character), so holding
-  // actually looks like it's inserting something rather than appearing to
-  // do nothing until you let go.
-  const [numberPreviewIndex, setNumberPreviewIndex] = useState<number | null>(null);
 
   // A row's height is fixed in dp regardless of orientation, but a
   // landscape screen is roughly half as tall as portrait - the same
@@ -249,11 +272,11 @@ export function KeyboardLayout({
 
   const layout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
 
-  // See styles.pressOverlay - a translucent wash that reads as "pressed"
+  // The translucent wash (drawn by useKeyPreview's press layer) that reads as "pressed"
   // regardless of which theme's specific key/pressed-background pair is
   // active, rather than relying on that pair alone being visibly distinct.
   // Shape/outline/3D/bold from the user's key style (see themes/keyStyle.ts).
-  const decor = keyDecor(keyStyle, theme);
+  const decor = useMemo(() => keyDecor(keyStyle, theme), [keyStyle, theme]);
 
   const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
@@ -286,7 +309,7 @@ export function KeyboardLayout({
   const commitChar = (char: string) => {
     const output = isShiftActive ? char.toUpperCase() : char;
     commitText(output);
-    trackWord(output === ' ' ? '' : typedWord + output);
+    trackWord(output === ' ' ? '' : currentTypedWord() + output);
     if (isShiftActive) {
       toggleShift();
     }
@@ -296,14 +319,14 @@ export function KeyboardLayout({
     // Any real typing invalidates a pending suggestion-undo - only the
     // *immediate* next backspace after applying a suggestion should revert
     // it.
-    if (lastSuggestion) {
+    if (currentLastSuggestion()) {
       setLastSuggestion(null);
     }
   };
 
   const deleteOneCharacter = () => {
     deleteBackward(1);
-    trackWord(typedWord.slice(0, -1));
+    trackWord(currentTypedWord().slice(0, -1));
   };
 
   // Gboard: a single backspace tap immediately after tapping a suggestion
@@ -311,6 +334,7 @@ export function KeyboardLayout({
   // Consumed at press-time (not release) since the undo is a whole-word
   // action, not a per-character one.
   const maybeUndoSuggestion = (): boolean => {
+    const lastSuggestion = currentLastSuggestion();
     if (!lastSuggestion || onDeleteBackward) {
       // Only meaningful for the real field - a redirected instance (GIF
       // search) has no suggestion chips to have applied in the first place.
@@ -328,6 +352,7 @@ export function KeyboardLayout({
   // next time its prefix is typed - previously the dictionary was a fixed
   // list that never grew from what the user actually types.
   const maybeLearnWord = () => {
+    const typedWord = currentTypedWord();
     if (effectiveShowSuggestions && typedWord.length >= 3) {
       learnWord(typedWord);
     }
@@ -364,7 +389,7 @@ export function KeyboardLayout({
         pendingSentenceEndRef.current = false;
         maybeLearnWord();
         trackWord('');
-        if (lastSuggestion) setLastSuggestion(null);
+        if (currentLastSuggestion()) setLastSuggestion(null);
         return;
       }
       case 'enter':
@@ -379,7 +404,7 @@ export function KeyboardLayout({
           InputConnection.sendEnter();
         }
         trackWord('');
-        if (lastSuggestion) setLastSuggestion(null);
+        if (currentLastSuggestion()) setLastSuggestion(null);
         return;
       case 'symbols':
         trackWord('');
@@ -410,8 +435,10 @@ export function KeyboardLayout({
   // than a manually-managed PanResponder instance.)
   const handleKeyPressRef = useRef(handleKeyPress);
   handleKeyPressRef.current = handleKeyPress;
-  const setPressedKeyIdRef = useRef(setPressedKeyId);
-  setPressedKeyIdRef.current = setPressedKeyId;
+  const pressKeyRef = useRef(pressKey);
+  pressKeyRef.current = pressKey;
+  const clearPressRef = useRef(clearPress);
+  clearPressRef.current = clearPress;
   const releaseKeyRef = useRef(releaseKey);
   releaseKeyRef.current = releaseKey;
 
@@ -535,7 +562,7 @@ export function KeyboardLayout({
       points: [point],
       keyWidth: box?.width ?? 30,
       active: false,
-      typedBefore: typedWord,
+      typedBefore: currentTypedWord(),
       shiftBefore: isShiftActive,
     };
   };
@@ -555,7 +582,7 @@ export function KeyboardLayout({
       trackWord(swipe.typedBefore);
       setShiftActive(swipe.shiftBefore);
       releaseKey();
-      setNumberPreviewIndex(null);
+      setPreviewOverride(null);
       if (swipeTypingTrailEnabled) trailRef.current?.start(swipe.start);
     }
     // Skip near-duplicate points - a finger reports far more moves than
@@ -592,7 +619,7 @@ export function KeyboardLayout({
     }
     if (swipe.shiftBefore) setShiftActive(false);
     pendingSentenceEndRef.current = false;
-    if (lastSuggestion) setLastSuggestion(null);
+    if (currentLastSuggestion()) setLastSuggestion(null);
   };
 
   // --- Delete key: native HoldRepeatKeyView handlers --------------------
@@ -608,7 +635,7 @@ export function KeyboardLayout({
   const deleteSuppressRepeatRef = useRef(false);
 
   const handleDeletePressStart = () => {
-    setPressedKeyId('delete');
+    pressKey('delete');
     deleteSuppressRepeatRef.current = maybeUndoSuggestion();
     if (deleteSuppressRepeatRef.current) {
       return;
@@ -644,7 +671,7 @@ export function KeyboardLayout({
   };
 
   const handleDeletePressEnd = (event: HoldRepeatPressEndEvent) => {
-    setPressedKeyId(null);
+    releaseKey();
     if (event.nativeEvent.dragMode) {
       if (deleteDragCharsRef.current > 0) {
         // deleteBackward (deleteSurroundingText) rather than deleteSelection:
@@ -675,7 +702,9 @@ export function KeyboardLayout({
     // A swipe that started on this key isn't a hold.
     if (swipeRef.current?.active) return;
     fireKeyFeedback();
-    setNumberPreviewIndex(keyIndex);
+    // Gboard shows the number in the bubble the moment the long-press
+    // fires, so holding visibly does something before the finger lifts.
+    setPreviewOverride({keyId: `0-${keyIndex}`, label: NUMBER_HINTS[keyIndex]});
     deleteBackward(1);
     commitText(NUMBER_HINTS[keyIndex]);
     trackWord('');
@@ -684,7 +713,7 @@ export function KeyboardLayout({
 
   const handleNumberHintPressEnd = () => {
     releaseKey();
-    setNumberPreviewIndex(null);
+    setPreviewOverride(null);
   };
 
   const spaceKeyDef: KeyDef = {key: 'space', action: 'space'};
@@ -707,14 +736,14 @@ export function KeyboardLayout({
         spaceDragModeRef.current = false;
         spaceDragStepsRef.current = 0;
         spaceLongPressFiredRef.current = false;
-        setPressedKeyIdRef.current('space');
+        pressKeyRef.current('space');
         spaceLongPressTimerRef.current = setTimeout(() => {
           // A drag already in progress (cursor move) is a different,
           // already-committed gesture - don't also pop the picker over it.
           if (spaceDragModeRef.current) return;
           spaceLongPressFiredRef.current = true;
           fireKeyFeedback();
-          setPressedKeyIdRef.current(null);
+          clearPressRef.current();
           ImeSwitcher.showPicker();
         }, LONG_PRESS_NUMBER_DELAY_MS);
       },
@@ -770,14 +799,12 @@ export function KeyboardLayout({
   // that one stays exactly as it was, this is an addition on top of it.
   const showNumberRow = showSuggestions && numberRowEnabled;
 
-  // While a top-row key's long-press is firing, the bubble shows its
-  // number rather than the letter.
   const keyPreview = renderPreview({
     theme,
     scale: keyboardSizeScale,
     fontFamily: keyFontFamily,
-    override:
-      numberPreviewIndex != null ? {keyId: `0-${numberPreviewIndex}`, label: NUMBER_HINTS[numberPreviewIndex]} : null,
+    highlightColor: pressOverlayColor,
+    radius: decor.radius,
   });
 
   const keyboardBody = (
@@ -810,7 +837,7 @@ export function KeyboardLayout({
                 decor.key,
                 {
                   flex: 1,
-                  backgroundColor: pressedKeyId === `numrow-${index}` ? theme.keyPressedBackground : theme.keyBackground,
+                  backgroundColor: theme.keyBackground,
                   paddingVertical: keyPaddingVertical,
                 },
               ]}
@@ -818,12 +845,6 @@ export function KeyboardLayout({
               <Text style={{color: theme.keyText, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
                 {digit}
               </Text>
-              {pressedKeyId === `numrow-${index}` && (
-                <View
-                  pointerEvents="none"
-                  style={[styles.pressOverlay, {borderRadius: decor.radius, backgroundColor: pressOverlayColor}]}
-                />
-              )}
             </View>
             );
           })}
@@ -848,7 +869,6 @@ export function KeyboardLayout({
           {row.map((keyDef, keyIndex) => {
             const keyId = `${rowIndex}-${keyIndex}`;
             const keyLabel = isShiftActive ? keyDef.key.toUpperCase() : keyDef.key;
-            const isPressed = pressedKeyId === keyId;
             const isPill = keyDef.action === 'symbols';
             const isAccent = keyDef.action === 'enter';
             const isShiftKey = keyDef.action === 'shift';
@@ -872,12 +892,10 @@ export function KeyboardLayout({
             else if (isAccent) backgroundColor = theme.accent;
             else if (isShiftKey && isShiftActive) backgroundColor = theme.keyPressedBackground;
 
-            const isKeyCurrentlyPressed = isDeleteKey
-              ? dragDeleteCount > 0 || pressedKeyId === 'delete'
-              : isSpaceKey
-                ? pressedKeyId === 'space'
-                : isPressed;
-            if (isKeyCurrentlyPressed) backgroundColor = theme.keyPressedBackground;
+            // A press is drawn over the key by useKeyPreview's layer, so keys
+            // don't change (or re-render) when pressed - except delete while
+            // drag-selecting, which shows its count.
+            if (isDeleteKey && dragDeleteCount > 0) backgroundColor = theme.keyPressedBackground;
 
             const textColor = isPill
               ? PILL_TEXT
@@ -887,16 +905,6 @@ export function KeyboardLayout({
                   ? theme.accent
                   : theme.keyText;
 
-            const pressOverlay = isKeyCurrentlyPressed ? (
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.pressOverlay,
-                  {borderRadius: isPill ? decor.pillRadius : isAccent ? decor.accentRadius : decor.radius},
-                  {backgroundColor: pressOverlayColor},
-                ]}
-              />
-            ) : null;
 
             // Delete: hold-to-repeat and drag-to-select both need reliable
             // native touch timing (see HoldRepeatKeyView.java for why plain
@@ -919,6 +927,7 @@ export function KeyboardLayout({
                   onRepeatTick={handleDeleteRepeatTick}
                   onDragMove={handleDeleteDragMove}
                   onPressEnd={handleDeletePressEnd}
+                  onLayout={trackKeyLayout('delete', String(rowIndex))}
                   style={[
                     styles.key,
                     decor.key,
@@ -931,7 +940,6 @@ export function KeyboardLayout({
                   ) : iconName ? (
                     <Icon name={iconName} size={keyIconSize} color={textColor} />
                   ) : null}
-                  {pressOverlay}
                 </HoldRepeatKeyView>
               );
             }
@@ -950,9 +958,9 @@ export function KeyboardLayout({
                     decor.key,
                     {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                   ]}
+                  onLayout={trackKeyLayout('space', String(rowIndex))}
                   {...spacePanResponder.panHandlers}>
                   {iconName ? <Icon name={iconName} size={keyIconSize} color={textColor} /> : null}
-                  {pressOverlay}
                 </View>
               );
             }
@@ -989,7 +997,6 @@ export function KeyboardLayout({
                       {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                     </Text>
                   )}
-                  {pressOverlay}
                 </HoldRepeatKeyView>
               );
             }
@@ -1010,7 +1017,11 @@ export function KeyboardLayout({
                   isAccent && {borderRadius: decor.accentRadius},
                   {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                 ]}
-                onLayout={trackKeyLayout(keyId, String(rowIndex))}>
+                onLayout={trackKeyLayout(
+                  keyId,
+                  String(rowIndex),
+                  isPill ? decor.pillRadius : isAccent ? decor.accentRadius : undefined,
+                )}>
                 {iconName ? (
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (
@@ -1018,7 +1029,6 @@ export function KeyboardLayout({
                     {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
                   </Text>
                 )}
-                {pressOverlay}
               </View>
             );
           })}
@@ -1077,21 +1087,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
-  // A clearly-visible press highlight on top of the resting-state
-  // backgroundColor swap above - that swap alone (theme.keyPressedBackground)
-  // is too close to theme.keyBackground on several themes to read as
-  // "this key is pressed" rather than just looking slightly different in
-  // a screenshot. A translucent white-on-dark/black-on-light wash is
-  // visible against literally any theme's key color, unlike a fixed
-  // tint tuned to one palette.
-  pressOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 13,
-  },
   numberHint: {
     position: 'absolute',
     top: 2,
@@ -1114,3 +1109,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
 });
+
+// Memoised so the toolbar/suggestion strip re-rendering above it (App.tsx,
+// on every letter typed) doesn't re-render all the keys too - the main
+// instance takes no props, so it only re-renders for its own state.
+export const KeyboardLayout = React.memo(KeyboardLayoutImpl);

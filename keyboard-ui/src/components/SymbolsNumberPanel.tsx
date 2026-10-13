@@ -65,17 +65,10 @@ export function SymbolsNumberPanel() {
 
   // Same press feedback as the main keyboard: a highlight on every key,
   // plus the preview bubble on keys that type a character.
-  const {pressedKeyId, pressKey, releaseKey, onBodyLayout, trackRowLayout, trackKeyLayout, renderPreview} =
+  const {pressKey, releaseKey, onBodyLayout, trackRowLayout, trackKeyLayout, renderPreview} =
     useKeyPreview();
   const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
-  const pressOverlay = (id: string, extraStyle?: object) =>
-    pressedKeyId === id ? (
-      <View
-        pointerEvents="none"
-        style={[styles.pressOverlay, {borderRadius: decor.radius}, extraStyle, {backgroundColor: pressOverlayColor}]}
-      />
-    ) : null;
 
   // A key that types `symbol`. Commits on press-in (not on release, which
   // is what onPress does) to match the main keyboard - typing there
@@ -91,7 +84,7 @@ export function SymbolsNumberPanel() {
         styles.key,
         decor.key,
         {
-          backgroundColor: pressedKeyId === id ? theme.keyPressedBackground : theme.keyBackground,
+          backgroundColor: theme.keyBackground,
           paddingVertical: keyPaddingVertical,
         },
       ]}
@@ -102,7 +95,6 @@ export function SymbolsNumberPanel() {
       }}
       onPressOut={releaseKey}>
       <Text style={{color: theme.keyText, fontSize: keyFontSize, fontWeight: decor.labelWeight}}>{symbol}</Text>
-      {pressOverlay(id)}
     </TouchableOpacity>
   );
 
@@ -131,9 +123,9 @@ export function SymbolsNumberPanel() {
             fireKeyFeedback();
           }}
           onPressOut={releaseKey}
+          onLayout={trackKeyLayout('pageToggle', '2', decor.pillRadius)}
           onPress={() => setPage(page === 'one' ? 'two' : 'one')}>
           <Text style={{color: PILL_TEXT, fontSize: 13 * keyboardSizeScale}}>{active.togglePill}</Text>
-          {pressOverlay('pageToggle', {borderRadius: decor.pillRadius})}
         </TouchableOpacity>
         {active.rows[2].map((symbol, keyIndex) => symbolKey(`2-${keyIndex}`, '2', symbol))}
         <HoldRepeatKeyView
@@ -146,17 +138,17 @@ export function SymbolsNumberPanel() {
             InputConnection.deleteBackward(1);
           }}
           onPressEnd={releaseKey}
+          onLayout={trackKeyLayout('delete', '2')}
           style={[
             styles.key,
             decor.key,
             {
               flex: 1.5,
-              backgroundColor: pressedKeyId === 'delete' ? theme.keyPressedBackground : theme.keyBackground,
+              backgroundColor: theme.keyBackground,
               paddingVertical: keyPaddingVertical,
             },
           ]}>
           <Icon name="backspace" size={keyIconSize} color={theme.keyText} />
-          {pressOverlay('delete')}
         </HoldRepeatKeyView>
       </View>
 
@@ -174,9 +166,9 @@ export function SymbolsNumberPanel() {
             fireKeyFeedback();
           }}
           onPressOut={releaseKey}
+          onLayout={trackKeyLayout('abc', '3', decor.pillRadius)}
           onPress={() => setActivePanel('keyboard')}>
           <Text style={{color: PILL_TEXT, fontSize: 13 * keyboardSizeScale}}>ABC</Text>
-          {pressOverlay('abc', {borderRadius: decor.pillRadius})}
         </TouchableOpacity>
         {symbolKey('3-left', '3', active.bottomLeftPunct)}
         <TouchableOpacity
@@ -186,7 +178,7 @@ export function SymbolsNumberPanel() {
             decor.key,
             {
               flex: 4,
-              backgroundColor: pressedKeyId === 'space' ? theme.keyPressedBackground : theme.keyBackground,
+              backgroundColor: theme.keyBackground,
               paddingVertical: keyPaddingVertical,
             },
           ]}
@@ -195,8 +187,8 @@ export function SymbolsNumberPanel() {
             fireKeyFeedback();
             commit(' ');
           }}
-          onPressOut={releaseKey}>
-          {pressOverlay('space')}
+          onPressOut={releaseKey}
+          onLayout={trackKeyLayout('space', '3')}>
         </TouchableOpacity>
         {symbolKey('3-right', '3', active.bottomRightPunct)}
         <TouchableOpacity
@@ -212,13 +204,13 @@ export function SymbolsNumberPanel() {
             fireKeyFeedback();
           }}
           onPressOut={releaseKey}
+          onLayout={trackKeyLayout('enter', '3', decor.accentRadius)}
           onPress={() => InputConnection.sendEnter()}>
           <Icon name="keyboard-return" size={keyIconSize} color="#FFFFFF" />
-          {pressOverlay('enter', {borderRadius: decor.accentRadius})}
         </TouchableOpacity>
       </View>
 
-      {renderPreview({theme, scale: keyboardSizeScale})}
+      {renderPreview({theme, scale: keyboardSizeScale, highlightColor: pressOverlayColor, radius: decor.radius})}
     </View>
   );
 }
@@ -236,13 +228,5 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  pressOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 6,
   },
 });

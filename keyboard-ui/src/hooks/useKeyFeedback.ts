@@ -9,7 +9,10 @@ import {useKeyboardStore} from '../store';
  * letter keyboard, so symbol and number keys were silent with sound on.
  */
 export function useKeyFeedback(): () => void {
-  const {hapticFeedbackEnabled, keySoundEnabled} = useKeyboardStore();
+  // Just these two settings - subscribing to the whole store re-rendered
+  // every keyboard using this hook on each letter typed.
+  const hapticFeedbackEnabled = useKeyboardStore(state => state.hapticFeedbackEnabled);
+  const keySoundEnabled = useKeyboardStore(state => state.keySoundEnabled);
   return () => {
     if (hapticFeedbackEnabled) Vibration.vibrate(8);
     if (keySoundEnabled) KeySound.playKeyClick();
