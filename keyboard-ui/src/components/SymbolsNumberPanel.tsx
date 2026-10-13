@@ -6,6 +6,7 @@ import {InputConnection} from '../native-bridge/InputConnection';
 import {PILL_BACKGROUND, PILL_TEXT} from './KeyboardLayout';
 import {HoldRepeatKeyView} from './HoldRepeatKeyView';
 import {useKeyPreview} from '../hooks/useKeyPreview';
+import {useKeyFeedback} from '../hooks/useKeyFeedback';
 import {keyDecor} from '../themes/keyStyle';
 
 // Hold-to-repeat delay/interval, matching KeyboardLayout's main-keyboard
@@ -59,6 +60,8 @@ export function SymbolsNumberPanel() {
   const rowMarginVertical = 2 * keyboardSizeScale;
 
   const commit = (text: string) => InputConnection.commitText(text);
+  // Sound/vibration on every key, same as the letter keyboard.
+  const fireKeyFeedback = useKeyFeedback();
 
   // Same press feedback as the main keyboard: a highlight on every key,
   // plus the preview bubble on keys that type a character.
@@ -94,6 +97,7 @@ export function SymbolsNumberPanel() {
       ]}
       onPressIn={() => {
         pressKey(id, symbol);
+        fireKeyFeedback();
         commit(symbol);
       }}
       onPressOut={releaseKey}>
@@ -122,7 +126,10 @@ export function SymbolsNumberPanel() {
             {borderRadius: decor.pillRadius},
             {flex: 1.5, backgroundColor: PILL_BACKGROUND, paddingVertical: keyPaddingVertical},
           ]}
-          onPressIn={() => pressKey('pageToggle')}
+          onPressIn={() => {
+            pressKey('pageToggle');
+            fireKeyFeedback();
+          }}
           onPressOut={releaseKey}
           onPress={() => setPage(page === 'one' ? 'two' : 'one')}>
           <Text style={{color: PILL_TEXT, fontSize: 13 * keyboardSizeScale}}>{active.togglePill}</Text>
@@ -134,7 +141,10 @@ export function SymbolsNumberPanel() {
           longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
           repeatIntervalMs={HOLD_REPEAT_INTERVAL_MS}
           onPressStart={() => pressKey('delete')}
-          onRepeatTick={() => InputConnection.deleteBackward(1)}
+          onRepeatTick={() => {
+            fireKeyFeedback();
+            InputConnection.deleteBackward(1);
+          }}
           onPressEnd={releaseKey}
           style={[
             styles.key,
@@ -159,7 +169,10 @@ export function SymbolsNumberPanel() {
             {borderRadius: decor.pillRadius},
             {flex: 1.5, backgroundColor: PILL_BACKGROUND, paddingVertical: keyPaddingVertical},
           ]}
-          onPressIn={() => pressKey('abc')}
+          onPressIn={() => {
+            pressKey('abc');
+            fireKeyFeedback();
+          }}
           onPressOut={releaseKey}
           onPress={() => setActivePanel('keyboard')}>
           <Text style={{color: PILL_TEXT, fontSize: 13 * keyboardSizeScale}}>ABC</Text>
@@ -179,6 +192,7 @@ export function SymbolsNumberPanel() {
           ]}
           onPressIn={() => {
             pressKey('space');
+            fireKeyFeedback();
             commit(' ');
           }}
           onPressOut={releaseKey}>
@@ -193,7 +207,10 @@ export function SymbolsNumberPanel() {
             {borderRadius: decor.accentRadius},
             {flex: 1.5, backgroundColor: theme.accent, paddingVertical: keyPaddingVertical},
           ]}
-          onPressIn={() => pressKey('enter')}
+          onPressIn={() => {
+            pressKey('enter');
+            fireKeyFeedback();
+          }}
           onPressOut={releaseKey}
           onPress={() => InputConnection.sendEnter()}>
           <Icon name="keyboard-return" size={keyIconSize} color="#FFFFFF" />

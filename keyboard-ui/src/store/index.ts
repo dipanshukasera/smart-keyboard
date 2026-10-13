@@ -5,7 +5,6 @@ import {ThemeStorage} from '../native-bridge/ThemeStorage';
 import {getSuggestions, getSpellingCorrection} from '../services/dictionary';
 import {getEmojiSuggestion} from '../data/emojiKeywords';
 import {DEFAULT_KEY_STYLE, KeyStyle} from '../themes/keyStyle';
-import type {LayoutStyle} from '../layouts/layoutStyles';
 
 export type PanelType =
   | 'keyboard'
@@ -67,7 +66,6 @@ const ONE_HANDED_MODE_KEY = 'one_handed_mode';
 const CLIPBOARD_HISTORY_KEY = 'clipboard_history';
 const RECENT_GIFS_KEY = 'recent_gifs';
 const LEARN_FROM_TYPING_KEY = 'learn_from_typing';
-const LAYOUT_STYLE_KEY = 'layout_style';
 const CUSTOM_THEMES_KEY = 'custom_themes';
 const KEYBOARD_SIZE_SCALE_KEY = 'keyboard_size_scale';
 const TRANSLATE_SOURCE_LOCALE_KEY = 'translate_source_locale';
@@ -96,7 +94,6 @@ interface KeyboardState {
   activePanel: PanelType;
   theme: KeyboardTheme;
   customThemes: KeyboardTheme[];
-  layoutStyle: LayoutStyle;
   // Multiplies key padding/font/icon size (see KeyboardLayout) - the
   // resulting height change flows through the existing onLayout ->
   // reportContentHeight pipeline, so no native change was needed to
@@ -198,7 +195,6 @@ interface KeyboardState {
   setTheme: (theme: KeyboardTheme) => void;
   addCustomTheme: (theme: KeyboardTheme) => void;
   deleteCustomTheme: (id: string) => void;
-  setLayoutStyle: (style: LayoutStyle) => void;
   setKeyboardSizeScale: (scale: number) => void;
   toggleShift: () => void;
   setShiftActive: (active: boolean) => void;
@@ -247,7 +243,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   activePanel: 'keyboard',
   theme: defaultTheme,
   customThemes: [],
-  layoutStyle: 'qwerty',
   keyboardSizeScale: 1,
   isShiftActive: false,
   translateSourceLocale: null,
@@ -309,10 +304,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     }
   },
 
-  setLayoutStyle: style => {
-    set({layoutStyle: style});
-    ThemeStorage.saveJSON(LAYOUT_STYLE_KEY, style);
-  },
 
   setKeyboardSizeScale: scale => {
     set({keyboardSizeScale: scale});
@@ -560,7 +551,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       clipboardHistory,
       recentGifs,
       learnFromTyping,
-      layoutStyle,
       customThemes,
       keyboardSizeScale,
       translateSourceLocale,
@@ -584,7 +574,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<ClipboardEntry[]>(CLIPBOARD_HISTORY_KEY, []),
       ThemeStorage.loadJSON<CachedGifEntry[]>(RECENT_GIFS_KEY, []),
       ThemeStorage.loadJSON<boolean>(LEARN_FROM_TYPING_KEY, true),
-      ThemeStorage.loadJSON<LayoutStyle>(LAYOUT_STYLE_KEY, 'qwerty'),
       ThemeStorage.loadJSON<KeyboardTheme[]>(CUSTOM_THEMES_KEY, []),
       ThemeStorage.loadJSON<number>(KEYBOARD_SIZE_SCALE_KEY, 1),
       ThemeStorage.loadJSON<string | null>(TRANSLATE_SOURCE_LOCALE_KEY, null),
@@ -611,7 +600,6 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       clipboardHistory,
       recentGifs,
       learnFromTyping,
-      layoutStyle,
       customThemes,
       keyboardSizeScale,
       translateSourceLocale,

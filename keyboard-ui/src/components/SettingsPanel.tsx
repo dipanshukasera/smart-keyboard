@@ -2,7 +2,6 @@ import React from 'react';
 import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore, OneHandedMode} from '../store';
-import {LAYOUT_STYLES, LAYOUT_STYLE_LABELS} from '../layouts/layoutStyles';
 import {PanelSheet} from './PanelSheet';
 
 // A plain-View pill rather than RN's built-in <Switch>: that component's
@@ -45,7 +44,7 @@ function ToggleRow({
   );
 }
 
-// Pick-one option row (layout style, size, one-handed side).
+// Pick-one option row (size, one-handed side).
 function OptionPills<T extends string | number>({
   options,
   value,
@@ -94,8 +93,6 @@ const ONE_HANDED_OPTIONS: {value: OneHandedMode; label: string; iconName: string
   {value: 'right', label: 'Right', iconName: 'format-indent-increase'},
 ];
 
-const LAYOUT_OPTIONS = LAYOUT_STYLES.map(style => ({value: style, label: LAYOUT_STYLE_LABELS[style]}));
-
 // Every keyboard preference except themes (those stay in ThemeCustomizer,
 // reached from the toolbar's theme icon).
 export function SettingsPanel() {
@@ -114,8 +111,6 @@ export function SettingsPanel() {
     setSwipeTypingTrailEnabled,
     swipeTypingEnabled,
     setSwipeTypingEnabled,
-    layoutStyle,
-    setLayoutStyle,
     keyboardSizeScale,
     setKeyboardSizeScale,
     oneHandedMode,
@@ -191,10 +186,6 @@ export function SettingsPanel() {
           <Text style={{color: theme.keyText, fontSize: 15}}>Toolbar order</Text>
           <Text style={{color: theme.accent, fontSize: 14, fontWeight: '600'}}>Customize</Text>
         </TouchableOpacity>
-
-        {sectionLabel('KEYBOARD LAYOUT')}
-        <OptionPills options={LAYOUT_OPTIONS} value={layoutStyle} onChange={setLayoutStyle} {...pillColors} />
-        <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Applies to English (UK)</Text>
 
         {sectionLabel('KEYBOARD SIZE')}
         <OptionPills options={SIZE_OPTIONS} value={keyboardSizeScale} onChange={setKeyboardSizeScale} {...pillColors} />

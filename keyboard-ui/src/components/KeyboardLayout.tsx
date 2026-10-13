@@ -9,19 +9,17 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  Vibration,
   useWindowDimensions,
   View,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection, ImeAction} from '../native-bridge/InputConnection';
-import {KeySound} from '../native-bridge/SoundModule';
 import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
 import type {KeyDef, LayoutDef} from '../layouts/types';
-import {buildStyledLayout} from '../layouts/layoutStyles';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
 import {useKeyPreview} from '../hooks/useKeyPreview';
+import {useKeyFeedback} from '../hooks/useKeyFeedback';
 import {keyDecor} from '../themes/keyStyle';
 import {decodeSwipe, Point} from '../services/swipeDecoder';
 import {getWordList} from '../services/dictionary';
@@ -143,7 +141,6 @@ export function KeyboardLayout({
 }: KeyboardLayoutProps = {}) {
   const {
     activeLocale,
-    layoutStyle,
     theme,
     isShiftActive,
     toggleShift,
@@ -159,8 +156,6 @@ export function KeyboardLayout({
     setLastSuggestion,
     keyboardSizeScale,
     numberRowEnabled,
-    hapticFeedbackEnabled,
-    keySoundEnabled,
     keyFontFamily,
     keyStyle,
     swipeTypingEnabled,
@@ -252,10 +247,7 @@ export function KeyboardLayout({
     return () => subscription.remove();
   }, [onCommitText, setShiftActive]);
 
-  const localeLayout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
-  // Layout style (QWERTY/AZERTY/QWERTZ/Dvorak/Colemak) only makes sense for
-  // English today - it's a Latin letter-arrangement choice, not a language.
-  const layout = activeLocale === 'en-GB' ? buildStyledLayout(layoutStyle, localeLayout) : localeLayout;
+  const layout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
 
   // See styles.pressOverlay - a translucent wash that reads as "pressed"
   // regardless of which theme's specific key/pressed-background pair is
@@ -345,10 +337,7 @@ export function KeyboardLayout({
   // tick, and the number-hint long-press) rather than baked into just one
   // of them, so turning either setting on actually covers typing in
   // general, not just a slice of it.
-  const fireKeyFeedback = () => {
-    if (hapticFeedbackEnabled) Vibration.vibrate(8);
-    if (keySoundEnabled) KeySound.playKeyClick();
-  };
+  const fireKeyFeedback = useKeyFeedback();
 
   const handleKeyPress = (keyDef: KeyDef) => {
     fireKeyFeedback();

@@ -5,6 +5,7 @@ import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {ENTER_ICON_BY_ACTION} from './KeyboardLayout';
 import {HoldRepeatKeyView} from './HoldRepeatKeyView';
+import {useKeyFeedback} from '../hooks/useKeyFeedback';
 
 // Hold-to-repeat delay/interval, matching KeyboardLayout's main-keyboard
 // delete key - see HoldRepeatKeyView.java for why this is a native touch
@@ -31,7 +32,12 @@ export function NumericPanel() {
       .catch(() => {});
   }, []);
 
-  const commit = (text: string) => InputConnection.commitText(text);
+  // Sound/vibration on every key, same as the letter keyboard.
+  const fireKeyFeedback = useKeyFeedback();
+  const commit = (text: string) => {
+    fireKeyFeedback();
+    InputConnection.commitText(text);
+  };
 
   // The bottom-left key is whichever of "." / "-" the field actually
   // accepts (never both - a real amount field takes one or the other, not
@@ -78,7 +84,10 @@ export function NumericPanel() {
           mode="repeat"
           longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
           repeatIntervalMs={HOLD_REPEAT_INTERVAL_MS}
-          onRepeatTick={() => InputConnection.deleteBackward(1)}
+          onRepeatTick={() => {
+            fireKeyFeedback();
+            InputConnection.deleteBackward(1);
+          }}
           style={[styles.key, {backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical}]}>
           <Icon name="backspace" size={keyIconSize} color={theme.keyText} />
         </HoldRepeatKeyView>
@@ -90,7 +99,10 @@ export function NumericPanel() {
             styles.accentKey,
             {flex: 3, backgroundColor: theme.accent, paddingVertical: keyPaddingVertical},
           ]}
-          onPress={() => InputConnection.sendEnter()}>
+          onPress={() => {
+            fireKeyFeedback();
+            InputConnection.sendEnter();
+          }}>
           <Icon name={enterIcon} size={keyIconSize} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
