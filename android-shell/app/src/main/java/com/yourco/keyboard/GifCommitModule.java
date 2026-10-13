@@ -108,6 +108,24 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                         getReactApplicationContext().getPackageName() + ".fileprovider",
                         localFile);
 
+                // Instagram's DM box declares image/gif but rejects any GIF a
+                // keyboard commits ("Tap the sticker icon to find and send
+                // GIFs" - it only takes GIFs from its own GIPHY picker), while
+                // still taking PNG/JPEG. Labelled as an image it goes through,
+                // arriving as a still picture (Instagram keeps the first
+                // frame; a sticker keeps its transparency) - better than
+                // nothing being sent. Every other app still gets the GIF.
+                if ("image/gif".equals(mimeType) && GIF_REFUSING_APPS.contains(info.packageName)) {
+                    File stillCopy = new File(localFile.getPath() + ".png");
+                    if (!stillCopy.exists()) {
+                        copyFile(localFile, stillCopy);
+                    }
+                    contentUri = FileProvider.getUriForFile(
+                            getReactApplicationContext(),
+                            getReactApplicationContext().getPackageName() + ".fileprovider",
+                            stillCopy);
+                    mimeType = "image/png";
+                }
                 // Offering both the exact type and the wildcard maximizes
                 // compatibility with receivers that match strictly against
                 // whichever one they declared in EditorInfo.contentMimeTypes.
@@ -204,6 +222,27 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                 return ".jpg";
             default:
                 return ".gif";
+        }
+    }
+
+    // Apps whose message box refuses GIFs from keyboards but accepts still
+    // images - see commitGif.
+    private static final java.util.Set<String> GIF_REFUSING_APPS =
+            java.util.Collections.singleton("com.instagram.android");
+
+    private static void copyFile(File from, File to) throws Exception {
+        File partFile = new File(to.getPath() + ".part");
+        try (InputStream in = new java.io.FileInputStream(from);
+             FileOutputStream out = new FileOutputStream(partFile)) {
+            byte[] buffer = new byte[16384];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        }
+        if (!partFile.renameTo(to)) {
+            partFile.delete();
+            throw new Exception("Couldn't write " + to.getName());
         }
     }
 
