@@ -854,7 +854,11 @@ export function KeyboardLayout({
             const isShiftKey = keyDef.action === 'shift';
             const isDeleteKey = keyDef.action === 'delete';
             const isSpaceKey = keyDef.action === 'space';
-            const showNumberHint = rowIndex === 0 && !keyDef.action && keyIndex < NUMBER_HINTS.length;
+            // With the number row on, the digits are right above - so the
+            // top row drops its small hint numbers and hold-for-number, and
+            // its keys become ordinary letter keys.
+            const showNumberHint =
+              !showNumberRow && rowIndex === 0 && !keyDef.action && keyIndex < NUMBER_HINTS.length;
             const iconName = actionIconName(keyDef, enterIcon);
 
             // Resting appearance first (pill/accent/shift-active tinting),
