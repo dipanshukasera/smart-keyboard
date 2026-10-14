@@ -366,6 +366,11 @@ function KeyboardLayoutImpl({
 
   const handleKeyPress = (keyDef: KeyDef) => {
     fireKeyFeedback();
+    // Double-space -> ". " is for two spaces in a row only. Timing alone
+    // wasn't enough: at fast typing speed a whole short word fits in the
+    // window, so "brown fox " turned into "brow. fox" (the next space
+    // deleted the last letter, taking it for the first space).
+    if (keyDef.action !== 'space') lastSpaceTimeRef.current = 0;
     switch (keyDef.action) {
       case 'shift':
         toggleShift();
@@ -453,7 +458,7 @@ function KeyboardLayoutImpl({
   // against the measured key boxes, so each finger types its own key the
   // moment it lands. Space, delete and the top row keep their own handlers
   // (drag/hold gestures); their touches simply aren't registered here.
-  const tapKeys: Record<string, {keyDef: KeyDef; label: string | null}> = {};
+  const tapKeys: Record<string, {keyDef: KeyDef; label: string | null; numberHint?: string}> = {};
   const tapKeysRef = useRef(tapKeys);
   tapKeysRef.current = tapKeys;
   // Touch identifier -> the key it pressed, to release the right one.
@@ -479,6 +484,13 @@ function KeyboardLayoutImpl({
   };
 
   const handleBodyTouchStart = (event: GestureResponderEvent) => {
+    // Fast typing overlaps keys: the next finger lands before the last
+    // one lifts. Anything still waiting on its finger has to be settled
+    // first so the text comes out in the order the keys were hit - the
+    // space (typed on release, for its drag gesture) goes in now, and a
+    // held top-row key is a tap after all, not a hold for its number.
+    commitPendingSpaceRef.current();
+    cancelNumberHolds();
     // A second finger landing means fast tap typing, not a swipe.
     if (event.nativeEvent.touches.length > 1 && swipeRef.current && !swipeRef.current.active) {
       swipeRef.current = null;
@@ -496,6 +508,16 @@ function KeyboardLayoutImpl({
       activeTouchesRef.current.set(String(touch.identifier), keyId);
       pressKey(keyId, tapKey.label);
       handleKeyPress(tapKey.keyDef);
+      if (tapKey.numberHint != null) {
+        const touchId = String(touch.identifier);
+        numberHoldTimersRef.current.set(
+          touchId,
+          setTimeout(() => {
+            numberHoldTimersRef.current.delete(touchId);
+            handleNumberHintLongPress(keyId, tapKey.numberHint!);
+          }, LONG_PRESS_NUMBER_DELAY_MS),
+        );
+      }
     }
   };
 
@@ -509,8 +531,15 @@ function KeyboardLayoutImpl({
       }
     }
     for (const touch of event.nativeEvent.changedTouches) {
-      if (activeTouchesRef.current.delete(String(touch.identifier))) {
+      const touchId = String(touch.identifier);
+      const holdTimer = numberHoldTimersRef.current.get(touchId);
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        numberHoldTimersRef.current.delete(touchId);
+      }
+      if (activeTouchesRef.current.delete(touchId)) {
         releaseKey();
+        setPreviewOverride(null);
       }
     }
   };
@@ -576,6 +605,7 @@ function KeyboardLayoutImpl({
     if (!swipe.active) {
       if (Math.hypot(point.x - swipe.start.x, point.y - swipe.start.y) < swipe.keyWidth * 0.6) return;
       swipe.active = true;
+      cancelNumberHolds();
       // Take back the letter the touch-down typed - this is a swipe, and
       // its first letter comes from the decoded word.
       deleteBackward(1);
@@ -687,33 +717,33 @@ function KeyboardLayoutImpl({
     }
   };
 
-  // --- Number-hint keys (row 0): native HoldRepeatKeyView handlers ------
-  // The letter is typed the moment the key is touched, like every other
-  // key - it used to wait for the finger to lift (so a hold could become
-  // the number instead), which made the top row's letters (e, t, o, i, r...
-  // the most common ones) consistently lag behind the rest. A hold now
-  // swaps the already-typed letter for the number.
-  const handleNumberHintPressStart = (keyId: string, label: string, keyDef: KeyDef) => {
-    pressKey(keyId, label);
-    handleKeyPress(keyDef);
+  // --- Number-hint keys (row 0): hold for the number -------------------
+  // Top-row letters are ordinary tap keys - typed on touch-down by
+  // handleBodyTouchStart, in the same stream as every other key. They used
+  // to be native HoldRepeatKeyViews whose press events took a separate
+  // route to JS, and when typing fast a top-row letter could arrive after
+  // the next key ("jumps" came out "ujpms"). Holding one still swaps the
+  // typed letter for its number, from this JS timer (touch id -> timer).
+  const numberHoldTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
+  const cancelNumberHolds = () => {
+    numberHoldTimersRef.current.forEach(clearTimeout);
+    numberHoldTimersRef.current.clear();
   };
 
-  const handleNumberHintLongPress = (keyIndex: number) => {
+  useEffect(() => cancelNumberHolds, []);
+
+  const handleNumberHintLongPress = (keyId: string, number: string) => {
     // A swipe that started on this key isn't a hold.
     if (swipeRef.current?.active) return;
     fireKeyFeedback();
     // Gboard shows the number in the bubble the moment the long-press
     // fires, so holding visibly does something before the finger lifts.
-    setPreviewOverride({keyId: `0-${keyIndex}`, label: NUMBER_HINTS[keyIndex]});
+    setPreviewOverride({keyId, label: number});
     deleteBackward(1);
-    commitText(NUMBER_HINTS[keyIndex]);
+    commitText(number);
     trackWord('');
     pendingSentenceEndRef.current = false;
-  };
-
-  const handleNumberHintPressEnd = () => {
-    releaseKey();
-    setPreviewOverride(null);
   };
 
   const spaceKeyDef: KeyDef = {key: 'space', action: 'space'};
@@ -728,6 +758,20 @@ function KeyboardLayoutImpl({
   // so adding a native view just for this one timer isn't worth it.
   const spaceLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spaceLongPressFiredRef = useRef(false);
+  // A space still waiting for its finger to lift (it's typed on release,
+  // since the press might turn into a cursor drag or the picker hold).
+  const spacePendingRef = useRef(false);
+  const commitPendingSpace = () => {
+    if (!spacePendingRef.current || spaceDragModeRef.current || spaceLongPressFiredRef.current) return;
+    spacePendingRef.current = false;
+    if (spaceLongPressTimerRef.current) {
+      clearTimeout(spaceLongPressTimerRef.current);
+      spaceLongPressTimerRef.current = null;
+    }
+    handleKeyPress(spaceKeyDef);
+  };
+  const commitPendingSpaceRef = useRef(commitPendingSpace);
+  commitPendingSpaceRef.current = commitPendingSpace;
   const spacePanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -736,6 +780,7 @@ function KeyboardLayoutImpl({
         spaceDragModeRef.current = false;
         spaceDragStepsRef.current = 0;
         spaceLongPressFiredRef.current = false;
+        spacePendingRef.current = true;
         pressKeyRef.current('space');
         spaceLongPressTimerRef.current = setTimeout(() => {
           // A drag already in progress (cursor move) is a different,
@@ -778,9 +823,10 @@ function KeyboardLayoutImpl({
           clearTimeout(spaceLongPressTimerRef.current);
           spaceLongPressTimerRef.current = null;
         }
-        if (!spaceDragModeRef.current && !spaceLongPressFiredRef.current) {
+        if (spacePendingRef.current && !spaceDragModeRef.current && !spaceLongPressFiredRef.current) {
           handleKeyPressRef.current(spaceKeyDef);
         }
+        spacePendingRef.current = false;
         spaceDragModeRef.current = false;
         spaceDragStepsRef.current = 0;
         releaseKeyRef.current();
@@ -965,47 +1011,17 @@ function KeyboardLayoutImpl({
               );
             }
 
-            // Gboard: holding a top-row letter key types its number hint
-            // instead - a short tap still types the letter as normal. Same
-            // native-timing reasoning as the delete key applies here (a
-            // held finger's tremor could cancel a JS setTimeout-driven
-            // TouchableOpacity long-press before it ever fires).
-            if (showNumberHint) {
-              return (
-                <HoldRepeatKeyView
-                  key={`${rowIndex}-${keyIndex}`}
-                  mode="longPressOnce"
-                  longPressDelayMs={LONG_PRESS_NUMBER_DELAY_MS}
-                  onPressStart={() => handleNumberHintPressStart(keyId, keyLabel, keyDef)}
-                  onLayout={trackKeyLayout(keyId, String(rowIndex))}
-                  onLongPress={() => handleNumberHintLongPress(keyIndex)}
-                  onPressEnd={handleNumberHintPressEnd}
-                  style={[
-                    styles.key,
-                    decor.key,
-                    isPill && {borderRadius: decor.pillRadius},
-                    isAccent && {borderRadius: decor.accentRadius},
-                    {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
-                  ]}>
-                  <Text style={[styles.numberHint, {color: theme.keyText, fontSize: 10 * keyboardSizeScale}]}>
-                    {NUMBER_HINTS[keyIndex]}
-                  </Text>
-                  {iconName ? (
-                    <Icon name={iconName} size={keyIconSize} color={textColor} />
-                  ) : (
-                    <Text style={{color: textColor, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
-                      {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
-                    </Text>
-                  )}
-                </HoldRepeatKeyView>
-              );
-            }
-
             // A tap key: typed by handleBodyTouchStart the instant a finger
             // lands on it (only character keys get a preview bubble -
             // shift, ?123, enter etc. just take the pressed highlight, as
             // in Gboard).
-            tapKeys[keyId] = {keyDef, label: keyDef.action ? null : keyLabel};
+            // A top-row letter can also be held for its number (see
+            // handleNumberHintLongPress).
+            tapKeys[keyId] = {
+              keyDef,
+              label: keyDef.action ? null : keyLabel,
+              numberHint: showNumberHint ? NUMBER_HINTS[keyIndex] : undefined,
+            };
             return (
               <View
                 key={`${rowIndex}-${keyIndex}`}
@@ -1022,6 +1038,11 @@ function KeyboardLayoutImpl({
                   String(rowIndex),
                   isPill ? decor.pillRadius : isAccent ? decor.accentRadius : undefined,
                 )}>
+                {showNumberHint && (
+                  <Text style={[styles.numberHint, {color: theme.keyText, fontSize: 10 * keyboardSizeScale}]}>
+                    {NUMBER_HINTS[keyIndex]}
+                  </Text>
+                )}
                 {iconName ? (
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (
