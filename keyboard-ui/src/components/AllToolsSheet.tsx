@@ -2,6 +2,7 @@ import React from 'react';
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
+import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
 import {PanelSheet} from './PanelSheet';
 
 interface ToolCard {
@@ -36,6 +37,9 @@ export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) 
     // (Key sound), not a separate feature with its own state.
     {id: 'sounds', label: 'Sounds', iconName: 'music-note', onPress: () => setActivePanel('settings')},
     {id: 'settings', label: 'Settings', iconName: 'settings', onPress: () => setActivePanel('settings')},
+    // Android's own keyboard picker - used to be a long-press on space,
+    // which kept popping up mid-typing when a space was held a bit long.
+    {id: 'switchKeyboard', label: 'Switch keyboard', iconName: 'keyboard', onPress: () => ImeSwitcher.showPicker()},
   ];
 
   return (
@@ -51,6 +55,11 @@ export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) 
               {tool.label}
             </Text>
           </TouchableOpacity>
+        ))}
+        {/* Invisible fillers so a part-filled last row lines up from the
+            left instead of being spread apart by space-between. */}
+        {Array.from({length: (4 - (tools.length % 4)) % 4}, (_, index) => (
+          <View key={`filler-${index}`} style={styles.filler} />
         ))}
       </View>
     </PanelSheet>
@@ -71,6 +80,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 10,
     gap: 6,
+  },
+  filler: {
+    width: '23%',
   },
   label: {
     fontSize: 11,

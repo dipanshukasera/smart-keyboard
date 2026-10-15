@@ -5,7 +5,6 @@ import {
   GestureResponderEvent,
   LayoutChangeEvent,
   NativeTouchEvent,
-  PanResponder,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -16,7 +15,6 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useShallow} from 'zustand/react/shallow';
 import {useKeyboardStore} from '../store';
 import {InputConnection, ImeAction} from '../native-bridge/InputConnection';
-import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
 import type {KeyDef, LayoutDef} from '../layouts/types';
 import {HoldRepeatKeyView, HoldRepeatPressEndEvent, HoldRepeatDragMoveEvent} from './HoldRepeatKeyView';
 import {useKeyPreview} from '../hooks/useKeyPreview';
@@ -384,9 +382,11 @@ function KeyboardLayoutImpl({
           commitText('. ');
           lastSpaceTimeRef.current = 0;
           endsSentence = true;
+          spaceTypedRef.current = 'period';
         } else {
           commitText(' ');
           lastSpaceTimeRef.current = now;
+          spaceTypedRef.current = 'space';
         }
         // Auto-capitalize the next letter after a sentence-ending space,
         // same as Gboard - see SENTENCE_END_CHARS.
@@ -430,23 +430,6 @@ function KeyboardLayoutImpl({
   // selection to make, so those keys keep their plain tap behavior there.
   const cursorControlEnabled = !onCommitText;
 
-  // The space PanResponder (below) is created once (useRef) so an
-  // in-flight gesture's identity is stable, but that means its closures
-  // would otherwise freeze the very first render's versions of these
-  // values - routing through refs keeps them current across every render
-  // instead. (The delete key no longer needs this: HoldRepeatKeyView's
-  // handlers are passed fresh as props every render, same as any other
-  // React event handler, since it's a real native UI component rather
-  // than a manually-managed PanResponder instance.)
-  const handleKeyPressRef = useRef(handleKeyPress);
-  handleKeyPressRef.current = handleKeyPress;
-  const pressKeyRef = useRef(pressKey);
-  pressKeyRef.current = pressKey;
-  const clearPressRef = useRef(clearPress);
-  clearPressRef.current = clearPress;
-  const releaseKeyRef = useRef(releaseKey);
-  releaseKeyRef.current = releaseKey;
-
   // --- Tap keys: one multi-touch handler for the whole keyboard --------
   // Plain keys (letters, punctuation, shift, ?123, enter, emoji, the
   // number row) aren't individually touchable. React Native gives a touch
@@ -485,12 +468,10 @@ function KeyboardLayoutImpl({
 
   const handleBodyTouchStart = (event: GestureResponderEvent) => {
     // Fast typing overlaps keys: the next finger lands before the last
-    // one lifts. Anything still waiting on its finger has to be settled
-    // first so the text comes out in the order the keys were hit - the
-    // space (typed on release, for its drag gesture) goes in now, and a
-    // held top-row key is a tap after all, not a hold for its number.
-    commitPendingSpaceRef.current();
+    // one lifts. A top-row key still held then was a tap after all, not a
+    // hold for its number, and a space still held isn't a cursor drag.
     cancelNumberHolds();
+    spaceTouchRef.current = null;
     // A second finger landing means fast tap typing, not a swipe.
     if (event.nativeEvent.touches.length > 1 && swipeRef.current && !swipeRef.current.active) {
       swipeRef.current = null;
@@ -508,6 +489,9 @@ function KeyboardLayoutImpl({
       activeTouchesRef.current.set(String(touch.identifier), keyId);
       pressKey(keyId, tapKey.label);
       handleKeyPress(tapKey.keyDef);
+      if (keyId === 'space' && point && cursorControlEnabled) {
+        spaceTouchRef.current = {touchId: String(touch.identifier), startX: point.x, steps: 0, dragging: false};
+      }
       if (tapKey.numberHint != null) {
         const touchId = String(touch.identifier);
         numberHoldTimersRef.current.set(
@@ -532,6 +516,7 @@ function KeyboardLayoutImpl({
     }
     for (const touch of event.nativeEvent.changedTouches) {
       const touchId = String(touch.identifier);
+      if (spaceTouchRef.current?.touchId === touchId) spaceTouchRef.current = null;
       const holdTimer = numberHoldTimersRef.current.get(touchId);
       if (holdTimer) {
         clearTimeout(holdTimer);
@@ -597,6 +582,7 @@ function KeyboardLayoutImpl({
   };
 
   const handleBodyTouchMove = (event: GestureResponderEvent) => {
+    handleSpaceDrag(event);
     const swipe = swipeRef.current;
     if (!swipe) return;
     const touch = event.nativeEvent.changedTouches.find(t => String(t.identifier) === swipe.touchId);
@@ -746,93 +732,45 @@ function KeyboardLayoutImpl({
     pendingSentenceEndRef.current = false;
   };
 
+  // --- Space: typed on touch-down, drag to move the cursor -------------
+  // A tap key like any other (typed by handleBodyTouchStart, in order with
+  // the rest), rather than its own PanResponder that typed on release: at
+  // speed the next letter often landed before the space lifted and went in
+  // ahead of it, and holding a moment too long popped up the system
+  // keyboard picker (that's now "Switch keyboard" in All tools). Sliding
+  // along the bar still moves the cursor - the space it typed is taken
+  // back once the finger has clearly started dragging.
   const spaceKeyDef: KeyDef = {key: 'space', action: 'space'};
-  const spaceDragModeRef = useRef(false);
-  const spaceDragStepsRef = useRef(0);
-  // Gboard: holding the spacebar (without dragging - see the cursor-move
-  // gesture below, which is a different, intentional use of the same key)
-  // opens Android's own keyboard-switcher dialog. Fired from a plain JS
-  // timer rather than HoldRepeatKeyView's native one - unlike the delete
-  // key, nothing here needs a *repeating* action, and the space key
-  // already has its own working gesture handling via this PanResponder,
-  // so adding a native view just for this one timer isn't worth it.
-  const spaceLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const spaceLongPressFiredRef = useRef(false);
-  // A space still waiting for its finger to lift (it's typed on release,
-  // since the press might turn into a cursor drag or the picker hold).
-  const spacePendingRef = useRef(false);
-  const commitPendingSpace = () => {
-    if (!spacePendingRef.current || spaceDragModeRef.current || spaceLongPressFiredRef.current) return;
-    spacePendingRef.current = false;
-    if (spaceLongPressTimerRef.current) {
-      clearTimeout(spaceLongPressTimerRef.current);
-      spaceLongPressTimerRef.current = null;
+  // What the last space press typed: a plain space, or a double-space
+  // period (which turned the previous space into ". ").
+  const spaceTypedRef = useRef<'space' | 'period'>('space');
+  const spaceTouchRef = useRef<{touchId: string; startX: number; steps: number; dragging: boolean} | null>(null);
+
+  const handleSpaceDrag = (event: GestureResponderEvent) => {
+    const space = spaceTouchRef.current;
+    if (!space) return;
+    const touch = event.nativeEvent.changedTouches.find(t => String(t.identifier) === space.touchId);
+    const point = touch ? bodyPoint(touch) : null;
+    if (!point) return;
+    const dx = point.x - space.startX;
+    if (!space.dragging) {
+      if (Math.abs(dx) <= DRAG_MODE_THRESHOLD_PX) return;
+      space.dragging = true;
+      if (spaceTypedRef.current === 'period') {
+        deleteBackward(2);
+        commitText(' ');
+      } else {
+        deleteBackward(1);
+      }
+      lastSpaceTimeRef.current = 0;
     }
-    handleKeyPress(spaceKeyDef);
+    const targetSteps = Math.trunc(dx / PIXELS_PER_CHAR);
+    const delta = targetSteps - space.steps;
+    for (let i = 0; i < Math.abs(delta); i++) {
+      InputConnection.moveCursor(delta > 0 ? 1 : -1);
+    }
+    space.steps = targetSteps;
   };
-  const commitPendingSpaceRef = useRef(commitPendingSpace);
-  commitPendingSpaceRef.current = commitPendingSpace;
-  const spacePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        spaceDragModeRef.current = false;
-        spaceDragStepsRef.current = 0;
-        spaceLongPressFiredRef.current = false;
-        spacePendingRef.current = true;
-        pressKeyRef.current('space');
-        spaceLongPressTimerRef.current = setTimeout(() => {
-          // A drag already in progress (cursor move) is a different,
-          // already-committed gesture - don't also pop the picker over it.
-          if (spaceDragModeRef.current) return;
-          spaceLongPressFiredRef.current = true;
-          fireKeyFeedback();
-          clearPressRef.current();
-          ImeSwitcher.showPicker();
-        }, LONG_PRESS_NUMBER_DELAY_MS);
-      },
-      onPanResponderMove: (_evt, gestureState) => {
-        // A redirected instance (GIF search) has no real cursor to move -
-        // leave drag-mode permanently false so release always falls
-        // through to a normal space-bar tap.
-        if (!cursorControlEnabled) return;
-        if (!spaceDragModeRef.current && Math.abs(gestureState.dx) > DRAG_MODE_THRESHOLD_PX) {
-          spaceDragModeRef.current = true;
-          // Dragging to move the cursor is unambiguous intent - cancel the
-          // pending picker so it can't fire out from under an in-progress
-          // drag a moment later.
-          if (spaceLongPressTimerRef.current) {
-            clearTimeout(spaceLongPressTimerRef.current);
-            spaceLongPressTimerRef.current = null;
-          }
-        }
-        if (!spaceDragModeRef.current) return;
-        const targetSteps = Math.trunc(gestureState.dx / PIXELS_PER_CHAR);
-        const delta = targetSteps - spaceDragStepsRef.current;
-        if (delta !== 0) {
-          const direction = delta > 0 ? 1 : -1;
-          for (let i = 0; i < Math.abs(delta); i++) {
-            InputConnection.moveCursor(direction);
-          }
-          spaceDragStepsRef.current = targetSteps;
-        }
-      },
-      onPanResponderRelease: () => {
-        if (spaceLongPressTimerRef.current) {
-          clearTimeout(spaceLongPressTimerRef.current);
-          spaceLongPressTimerRef.current = null;
-        }
-        if (spacePendingRef.current && !spaceDragModeRef.current && !spaceLongPressFiredRef.current) {
-          handleKeyPressRef.current(spaceKeyDef);
-        }
-        spacePendingRef.current = false;
-        spaceDragModeRef.current = false;
-        spaceDragStepsRef.current = 0;
-        releaseKeyRef.current();
-      },
-    }),
-  ).current;
 
   // Only the real keyboard (not GifStickerPanel's redirected reuse) can go
   // one-handed - a search-query mini keyboard has no need for it.
@@ -990,22 +928,19 @@ function KeyboardLayoutImpl({
               );
             }
 
-            // Space's cursor-drag gesture stays on RN's PanResponder - it's
-            // not affected by the timer-starvation problem (no repeat timer
-            // to starve) or by TouchableOpacity's cancel-on-move heuristic
-            // (it was never a TouchableOpacity), so there was no reason to
-            // move it to the native view.
+            // Space: a tap key too - see handleSpaceDrag.
             if (isSpaceKey) {
+              tapKeys.space = {keyDef: spaceKeyDef, label: null};
               return (
                 <View
                   key={`${rowIndex}-${keyIndex}`}
+                  pointerEvents="none"
                   style={[
                     styles.key,
                     decor.key,
                     {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                   ]}
-                  onLayout={trackKeyLayout('space', String(rowIndex))}
-                  {...spacePanResponder.panHandlers}>
+                  onLayout={trackKeyLayout('space', String(rowIndex))}>
                   {iconName ? <Icon name={iconName} size={keyIconSize} color={textColor} /> : null}
                 </View>
               );
