@@ -78,6 +78,14 @@ export default function App() {
   // detected even when the user switches to it mid-session without the
   // keyboard's own RN surface ever remounting.
   useEffect(() => {
+    // The event can fire before this JS has loaded (the first time the
+    // keyboard opens after its process starts - a phone field then got
+    // QWERTY), so ask for the current field once on mount too.
+    InputConnection.getFieldInfo().then(info => {
+      if (!info) return;
+      setSensitiveField(info.isPasswordField);
+      setNumericField(info.isNumericField, info.allowDecimal, info.allowSign);
+    });
     const subscription = DeviceEventEmitter.addListener(
       'onInputFieldChanged',
       (event: {isPasswordField: boolean; isNumericField: boolean; allowDecimal: boolean; allowSign: boolean}) => {

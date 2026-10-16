@@ -4,7 +4,9 @@ import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -163,6 +165,19 @@ public class InputConnectionBridge extends ReactContextBaseJavaModule {
     @ReactMethod
     public void isPasswordField(Promise promise) {
         promise.resolve(currentFieldIsPassword());
+    }
+
+    // The same facts as the onInputFieldChanged event, on request: that
+    // event can fire before JS has loaded (the first time the keyboard
+    // opens after its process starts), so JS also asks once on mount.
+    @ReactMethod
+    public void getFieldInfo(Promise promise) {
+        WritableMap info = Arguments.createMap();
+        info.putBoolean("isPasswordField", currentFieldIsPassword());
+        info.putBoolean("isNumericField", currentFieldIsNumeric());
+        info.putBoolean("allowDecimal", currentNumericFieldAllowsDecimal());
+        info.putBoolean("allowSign", currentNumericFieldAllowsSign());
+        promise.resolve(info);
     }
 
     // Package-visible so KeyboardReactView's field-change listener can

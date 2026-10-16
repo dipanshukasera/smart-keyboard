@@ -18,6 +18,14 @@ interface InputConnectionBridgeNative {
   deleteSelection(): void;
   moveCursor(direction: number): void;
   isPasswordField(): Promise<boolean>;
+  getFieldInfo(): Promise<FieldInfo>;
+}
+
+export interface FieldInfo {
+  isPasswordField: boolean;
+  isNumericField: boolean;
+  allowDecimal: boolean;
+  allowSign: boolean;
 }
 
 const native = NativeModules.InputConnectionBridge as InputConnectionBridgeNative | undefined;
@@ -89,6 +97,15 @@ export const InputConnection = {
       return await native.isPasswordField();
     } catch {
       return false;
+    }
+  },
+
+  async getFieldInfo(): Promise<FieldInfo | null> {
+    if (!native) return null;
+    try {
+      return await native.getFieldInfo();
+    } catch {
+      return null;
     }
   },
 };

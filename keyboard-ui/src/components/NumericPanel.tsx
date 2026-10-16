@@ -1,9 +1,11 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {useShallow} from 'zustand/react/shallow';
 import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {ENTER_ICON_BY_ACTION} from './KeyboardLayout';
+import {keyDecor} from '../themes/keyStyle';
 import {HoldRepeatKeyView} from './HoldRepeatKeyView';
 import {useKeyFeedback} from '../hooks/useKeyFeedback';
 
@@ -19,11 +21,23 @@ const HOLD_REPEAT_INTERVAL_MS = 60;
 // payment amount box, PIN field, or phone number field never wants QWERTY.
 // See App.tsx's onInputFieldChanged listener and store's isNumericField.
 export function NumericPanel() {
-  const {theme, numericFieldAllowsDecimal, numericFieldAllowsSign, keyboardSizeScale} = useKeyboardStore();
+  const {theme, numericFieldAllowsDecimal, numericFieldAllowsSign, keyboardSizeScale, keyStyle, keyFontFamily} =
+    useKeyboardStore(
+      useShallow(state => ({
+        theme: state.theme,
+        numericFieldAllowsDecimal: state.numericFieldAllowsDecimal,
+        numericFieldAllowsSign: state.numericFieldAllowsSign,
+        keyboardSizeScale: state.keyboardSizeScale,
+        keyStyle: state.keyStyle,
+        keyFontFamily: state.keyFontFamily,
+      })),
+    );
+  // Same key shape/outline/3D/bold as the letter keyboard (Themes > Key style).
+  const decor = useMemo(() => keyDecor(keyStyle, theme), [keyStyle, theme]);
   const keyPaddingVertical = 14 * keyboardSizeScale;
-  const keyFontSize = 20 * keyboardSizeScale;
-  const keyIconSize = 20 * keyboardSizeScale;
-  const rowMarginVertical = 2 * keyboardSizeScale;
+  const keyFontSize = 22 * keyboardSizeScale;
+  const keyIconSize = 22 * keyboardSizeScale;
+  const rowMarginVertical = 3 * keyboardSizeScale;
   const [enterIcon, setEnterIcon] = useState('keyboard-return');
 
   useEffect(() => {
@@ -39,10 +53,9 @@ export function NumericPanel() {
     InputConnection.commitText(text);
   };
 
-  // The bottom-left key is whichever of "." / "-" the field actually
-  // accepts (never both - a real amount field takes one or the other, not
-  // a full expression), and is left blank rather than guessing if neither
-  // flag is set (e.g. a 4-digit PIN box).
+  // Whichever of "." / "-" the field actually accepts (never both - a real
+  // amount field takes one or the other, not a full expression); left out
+  // entirely if neither flag is set (e.g. a 4-digit PIN box).
   const cornerKey = numericFieldAllowsDecimal ? '.' : numericFieldAllowsSign ? '-' : null;
 
   const digitRows = [
@@ -51,35 +64,49 @@ export function NumericPanel() {
     ['7', '8', '9'],
   ];
 
+  const keyStyleFor = (backgroundColor: string, extra?: object) => [
+    styles.key,
+    decor.key,
+    {backgroundColor, paddingVertical: keyPaddingVertical},
+    extra,
+  ];
+
+  const label = (text: string) => (
+    <Text
+      style={{
+        color: theme.keyText,
+        fontSize: keyFontSize,
+        fontWeight: decor.labelWeight,
+        fontFamily: keyFontFamily ?? undefined,
+      }}>
+      {text}
+    </Text>
+  );
+
+  // Typed on press-in, not release, like the letter keyboard - fast PIN
+  // entry shouldn't wait for each finger to lift.
+  const digitKey = (text: string, flex = 1) => (
+    <TouchableOpacity
+      key={text}
+      activeOpacity={0.6}
+      style={keyStyleFor(theme.keyBackground, {flex})}
+      onPressIn={() => commit(text)}>
+      {label(text)}
+    </TouchableOpacity>
+  );
+
   return (
     <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
       {digitRows.map((row, rowIndex) => (
         <View key={rowIndex} style={[styles.row, {marginVertical: rowMarginVertical}]}>
-          {row.map(digit => (
-            <TouchableOpacity
-              key={digit}
-              style={[styles.key, {backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical}]}
-              onPress={() => commit(digit)}>
-              <Text style={{color: theme.keyText, fontSize: keyFontSize}}>{digit}</Text>
-            </TouchableOpacity>
-          ))}
+          {row.map(digit => digitKey(digit))}
         </View>
       ))}
+      {/* Delete, 0, enter - with "." / "-" ahead of them when the field
+          takes one, so delete always sits just before 0 and enter just
+          after it. */}
       <View style={[styles.row, {marginVertical: rowMarginVertical}]}>
-        <TouchableOpacity
-          style={[
-            styles.key,
-            {backgroundColor: theme.keyBackground, opacity: cornerKey ? 1 : 0.3, paddingVertical: keyPaddingVertical},
-          ]}
-          disabled={!cornerKey}
-          onPress={() => cornerKey && commit(cornerKey)}>
-          {cornerKey && <Text style={{color: theme.keyText, fontSize: keyFontSize}}>{cornerKey}</Text>}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.key, {backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical}]}
-          onPress={() => commit('0')}>
-          <Text style={{color: theme.keyText, fontSize: keyFontSize}}>0</Text>
-        </TouchableOpacity>
+        {cornerKey && digitKey(cornerKey, 0.6)}
         <HoldRepeatKeyView
           mode="repeat"
           longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
@@ -88,17 +115,13 @@ export function NumericPanel() {
             fireKeyFeedback();
             InputConnection.deleteBackward(1);
           }}
-          style={[styles.key, {backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical}]}>
+          style={keyStyleFor(theme.keyBackground)}>
           <Icon name="backspace" size={keyIconSize} color={theme.keyText} />
         </HoldRepeatKeyView>
-      </View>
-      <View style={[styles.row, {marginVertical: rowMarginVertical}]}>
+        {digitKey('0')}
         <TouchableOpacity
-          style={[
-            styles.key,
-            styles.accentKey,
-            {flex: 3, backgroundColor: theme.accent, paddingVertical: keyPaddingVertical},
-          ]}
+          activeOpacity={0.6}
+          style={keyStyleFor(theme.accent, {borderRadius: decor.accentRadius})}
           onPress={() => {
             fireKeyFeedback();
             InputConnection.sendEnter();
@@ -120,13 +143,8 @@ const styles = StyleSheet.create({
   },
   key: {
     flex: 1,
-    marginHorizontal: 2,
-    paddingVertical: 14,
-    borderRadius: 6,
+    marginHorizontal: 3,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  accentKey: {
-    borderRadius: 24,
   },
 });
