@@ -1,6 +1,7 @@
 import React, {useEffect, useRef} from 'react';
 import {
   DeviceEventEmitter,
+  Image,
   LayoutChangeEvent,
   NativeModules,
   StyleSheet,
@@ -263,7 +264,15 @@ export default function App() {
   const showsToolbarRow = activePanel === 'keyboard' || activePanel === 'symbols';
 
   return (
-    <View style={[styles.root, {backgroundColor: theme.panelBackground}]}>
+    <View style={[styles.root, {backgroundColor: theme.backgroundBase ?? theme.panelBackground}]}>
+      {/* A photo theme's picture behind everything (themes/imageTheme.ts),
+          with a light or dark wash so keys and text stay readable. */}
+      {theme.backgroundImage && (
+        <>
+          <Image source={{uri: theme.backgroundImage}} style={StyleSheet.absoluteFill} resizeMode="cover" fadeDuration={0} />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, {backgroundColor: theme.backgroundScrim}]} />
+        </>
+      )}
       <View onLayout={handleContentLayout}>
         {showsToolbarRow && (
         <View style={[styles.toolbar, isLandscape && styles.toolbarLandscape]}>

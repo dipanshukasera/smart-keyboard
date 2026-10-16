@@ -23,6 +23,7 @@ public class KeyboardBridgePackage implements ReactPackage {
         modules.add(new GifCommitModule(reactContext));
         modules.add(new SoundModule(reactContext));
         modules.add(new ImeSwitcherModule(reactContext));
+        modules.add(new BackgroundImageModule(reactContext));
         return modules;
     }
 

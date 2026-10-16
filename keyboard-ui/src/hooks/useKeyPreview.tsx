@@ -227,7 +227,9 @@ function PressLayer({
             top: top - bubbleHeight + rect.height * 0.2,
             width: bubbleWidth,
             height: bubbleHeight,
-            backgroundColor: theme.keyBackground,
+            // Opaque even on a photo theme's see-through keys, so the
+            // keys under the bubble don't show through it.
+            backgroundColor: theme.keyBackground.slice(0, 7),
             borderColor: override ? theme.accent : theme.keyText + '22',
           },
         ]}>

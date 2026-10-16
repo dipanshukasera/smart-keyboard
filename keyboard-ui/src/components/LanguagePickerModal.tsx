@@ -29,7 +29,7 @@ export function LanguagePickerModal({state}: {state: TranslationPanelState}) {
 
   return (
     <View style={styles.pickerOverlay}>
-      <View style={[styles.pickerCard, {backgroundColor: theme.panelBackground}]}>
+      <View style={[styles.pickerCard, {backgroundColor: theme.backgroundBase ?? theme.panelBackground}]}>
         <Text style={[styles.pickerTitle, {color: theme.keyText}]}>
           {picker === 'source' ? 'Translate from' : 'Translate to'}
         </Text>

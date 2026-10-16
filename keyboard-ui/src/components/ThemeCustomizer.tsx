@@ -1,10 +1,12 @@
 import React, {useState} from 'react';
-import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {BUILT_IN_THEMES} from '../themes/presets';
 import {ThemeCreator} from './ThemeCreator';
 import {KeyShape, keyDecor} from '../themes/keyStyle';
+import {BackgroundImage} from '../native-bridge/BackgroundImage';
+import {themeFromImage} from '../themes/imageTheme';
 
 const SHAPES: {value: KeyShape; label: string}[] = [
   {value: 'rounded', label: 'Rounded'},
@@ -17,10 +19,28 @@ const SHAPES: {value: KeyShape; label: string}[] = [
 // chosen. Every other preference (layout, size, one-handed, privacy,
 // content) is in SettingsPanel.
 export function ThemeCustomizer() {
-  const {theme, setTheme, customThemes, deleteCustomTheme, setActivePanel, keyStyle, setKeyStyle} =
+  const {theme, setTheme, customThemes, deleteCustomTheme, addCustomTheme, setActivePanel, keyStyle, setKeyStyle} =
     useKeyboardStore();
   const decor = keyDecor(keyStyle, theme);
   const [showCreator, setShowCreator] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+
+  // A photo as the keyboard background, with key/text/accent colours taken
+  // from it (themes/imageTheme.ts). Saved as a custom theme, so it can be
+  // switched back to or long-pressed away like the others.
+  const pickPhoto = async () => {
+    setPickError(null);
+    setPicking(true);
+    try {
+      const picked = await BackgroundImage.pick();
+      if (picked) addCustomTheme(themeFromImage(picked));
+    } catch (e) {
+      setPickError(e instanceof Error ? e.message : "Couldn't use that image");
+    } finally {
+      setPicking(false);
+    }
+  };
 
   if (showCreator) {
     return <ThemeCreator onDone={() => setShowCreator(false)} />;
@@ -58,9 +78,20 @@ export function ThemeCustomizer() {
               ]}
               onPress={() => setTheme(custom)}
               onLongPress={() => deleteCustomTheme(custom.id)}>
-              <Text style={{color: custom.keyText}} numberOfLines={1}>
-                {custom.name}
-              </Text>
+              {custom.backgroundImage && (
+                <Image source={{uri: custom.backgroundImage}} style={styles.swatchImage} resizeMode="cover" />
+              )}
+              {custom.backgroundImage ? (
+                // A key-shaped chip in the theme's own colours over the photo.
+                <View style={[styles.swatchChip, {backgroundColor: custom.keyBackground}]}>
+                  <Text style={{color: custom.keyText, fontSize: 12}}>Aa</Text>
+                  <View style={[styles.swatchDot, {backgroundColor: custom.accent}]} />
+                </View>
+              ) : (
+                <Text style={{color: custom.keyText}} numberOfLines={1}>
+                  {custom.name}
+                </Text>
+              )}
             </TouchableOpacity>
           ))}
           <TouchableOpacity
@@ -68,7 +99,21 @@ export function ThemeCustomizer() {
             onPress={() => setShowCreator(true)}>
             <Icon name="add" size={20} color={theme.keyText + '99'} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.swatch, styles.createSwatch, {borderColor: theme.keyText + '33'}]}
+            disabled={picking}
+            onPress={pickPhoto}>
+            {picking ? (
+              <ActivityIndicator color={theme.accent} />
+            ) : (
+              <>
+                <Icon name="add-photo-alternate" size={22} color={theme.keyText + '99'} />
+                <Text style={{color: theme.keyText + '99', fontSize: 11, marginTop: 4}}>Photo</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
+        {pickError && <Text style={[styles.hint, {color: theme.accent}]}>{pickError}</Text>}
         {customThemes.length > 0 && (
           <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Long-press a custom theme to delete it</Text>
         )}
@@ -146,6 +191,24 @@ const styles = StyleSheet.create({
     marginRight: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  swatchImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 6,
+  },
+  swatchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  swatchDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginLeft: 6,
   },
   createSwatch: {
     borderStyle: 'dashed',

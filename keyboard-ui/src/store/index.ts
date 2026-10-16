@@ -2,6 +2,7 @@ import {create} from 'zustand';
 import type {KeyboardTheme} from '../themes/themeTypes';
 import {defaultTheme} from '../themes/default';
 import {ThemeStorage} from '../native-bridge/ThemeStorage';
+import {BackgroundImage} from '../native-bridge/BackgroundImage';
 import {getSuggestions, getSpellingCorrection} from '../services/dictionary';
 import {getEmojiSuggestion} from '../data/emojiKeywords';
 import {DEFAULT_KEY_STYLE, KeyStyle} from '../themes/keyStyle';
@@ -294,6 +295,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   },
 
   deleteCustomTheme: id => {
+    const removed = get().customThemes.find(t => t.id === id);
+    if (removed?.backgroundImage) BackgroundImage.remove(removed.backgroundImage);
     const updated = get().customThemes.filter(t => t.id !== id);
     set({customThemes: updated});
     ThemeStorage.saveJSON(CUSTOM_THEMES_KEY, updated);

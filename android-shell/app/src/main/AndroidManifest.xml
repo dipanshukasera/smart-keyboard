@@ -32,6 +32,15 @@
                 android:resource="@xml/method" />
         </service>
 
+        <!-- Themes > "Photo": opens the system photo picker on the IME's
+             behalf (see PickBackgroundActivity). Invisible itself. -->
+        <activity
+            android:name=".PickBackgroundActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Lets GifCommitModule hand a downloaded GIF file to the host app
              (e.g. Instagram's DM compose box) as a content:// URI via
              InputConnection.commitContent, instead of just a clipboard
