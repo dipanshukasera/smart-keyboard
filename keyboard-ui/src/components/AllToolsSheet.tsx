@@ -37,10 +37,10 @@ export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) 
     // SettingsPanel) - the reference's "Sounds" is one section within it
     // (Key sound), not a separate feature with its own state.
     {id: 'sounds', label: 'Sounds', iconName: 'music-note', onPress: () => setActivePanel('settings')},
-    {id: 'settings', label: 'Settings', iconName: 'settings', onPress: () => setActivePanel('settings')},
     // Android's own keyboard picker - used to be a long-press on space,
     // which kept popping up mid-typing when a space was held a bit long.
     {id: 'switchKeyboard', label: 'Switch keyboard', iconName: 'keyboard', onPress: () => ImeSwitcher.showPicker()},
+    {id: 'settings', label: 'Settings', iconName: 'settings', onPress: () => setActivePanel('settings')},
   ];
 
   return (

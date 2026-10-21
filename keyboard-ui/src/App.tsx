@@ -73,10 +73,15 @@ export default function App() {
   const isLandscape = windowWidth > windowHeight;
 
   useEffect(() => {
-    hydrate();
-    // A head start for the GIF panel: wakes the server if it was asleep and
-    // downloads the first previews (see gifFeedCache).
-    prefetchFeed('/api/gif/trending');
+    // A head start for the GIF, sticker and (if switched on) 18+ panels:
+    // wakes the server if it was asleep and downloads the first previews
+    // (see gifFeedCache). Waits for the saved settings, so 18+ is only
+    // fetched for someone who turned it on.
+    hydrate().then(() => {
+      prefetchFeed('/api/gif/trending');
+      prefetchFeed('/api/gif/stickers/trending');
+      if (useKeyboardStore.getState().adultGifsEnabled) prefetchFeed('/api/gif/adult/trending');
+    });
   }, [hydrate]);
 
   // Emitted by KeyboardReactView (native) every time focus moves to a

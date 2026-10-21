@@ -46,7 +46,7 @@ const {ClipboardModule} = NativeModules;
 
 // First pages of searches already made this session, so tapping a tag chip
 // (or repeating a search) shows its results at once instead of waiting on
-// the server again. Never holds 18+ results.
+// the server again. Covers GIFs, stickers and 18+.
 const searchCache = new Map<string, {results: GifResult[]; hasMore: boolean}>();
 
 // The backend's mp4 -> .gif endpoint for one 18+ clip. The path ends in
@@ -225,10 +225,8 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       setError(null);
       // The feed from last time (memory, else saved on the phone) goes up at
       // once - its images are already in the image cache - while a fresh one
-      // is fetched behind it. 18+ is never kept (see gifFeedCache), so it
-      // always starts blank.
-      const keepable = contentType !== 'adult';
-      const known = keepable ? cachedFeed(trendingEndpoint) ?? (await loadCachedFeed(trendingEndpoint)) : null;
+      // is fetched behind it. The same for GIFs, stickers and 18+.
+      const known = cachedFeed(trendingEndpoint) ?? (await loadCachedFeed(trendingEndpoint));
       if (queryRef.current.trim()) return;
       if (known) {
         setResults(known);
@@ -245,7 +243,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
           // fetch. Left alone if it's the same set already showing, so the
           // grid doesn't blink.
           const fresh = response.data.results;
-          if (keepable) rememberFeed(trendingEndpoint, fresh);
+          rememberFeed(trendingEndpoint, fresh);
           const sameAsShown = known && known.length === fresh.length && known.every((item, i) => item.id === fresh[i].id);
           if (!sameAsShown) setResults(fresh);
         }
@@ -301,7 +299,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       setLoadingMore(true);
     }
     setError(null);
-    const cacheKey = contentType === 'adult' || page !== 1 ? null : `${searchEndpoint}|${text.trim().toLowerCase()}`;
+    const cacheKey = page !== 1 ? null : `${searchEndpoint}|${text.trim().toLowerCase()}`;
     const known = cacheKey ? searchCache.get(cacheKey) : undefined;
     if (known) {
       setHasMore(known.hasMore);

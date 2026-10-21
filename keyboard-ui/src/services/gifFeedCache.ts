@@ -11,8 +11,9 @@ import {ThemeStorage} from '../native-bridge/ThemeStorage';
 //  - prefetchFeed: fetched when the keyboard starts - it wakes the server up
 //    and downloads the first previews into the image cache, so by the time
 //    the panel opens they're already on the phone.
-// 18+ is deliberately never saved or prefetched: only the plain GIF and
-// sticker feeds go through here.
+// Used for GIFs, stickers and 18+ alike. The 18+ feed is only prefetched when
+// the user has switched 18+ on (see App); like Recent, what's kept is just
+// links and the images the image cache already holds, on this phone only.
 
 export interface FeedItem {
   id: string;
