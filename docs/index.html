@@ -307,7 +307,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
       <a href="#get">Get it</a>
       <a href="#request">Request a feature</a>
     </nav>
-    <a class="cap small" href="#get">Download</a>
+    <a class="cap small" href="https://github.com/dipanshukasera/smart-keyboard/releases/latest/download/smart-keyboard.apk" rel="noopener">Download</a>
   </div>
 </header>
 
@@ -319,7 +319,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
         <h1 style="margin-top:14px">Type less.<br><em>Say more.</em></h1>
         <p class="lede">Swipe, speak or tap in English, Hindi and Spanish. It learns the words you use, fixes the slips, and sends GIFs where other keyboards can't.</p>
         <div class="cta">
-          <a class="cap" href="#get">Download for Android</a>
+          <a class="cap" href="https://github.com/dipanshukasera/smart-keyboard/releases/latest/download/smart-keyboard.apk" rel="noopener">Download for Android</a>
           <a class="cap quiet" href="#features">See what it does</a>
         </div>
         <dl class="facts">
@@ -433,7 +433,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
           <p class="eyebrow" style="color:rgba(255,255,255,.75)">Latest version</p>
           <h3 id="dl-title">Smart Keyboard 1.0.8</h3>
           <div class="meta"><span id="dl-date">Released 21 Oct 2026</span><span>Android 7.0 or newer</span><span id="dl-size">About 65 MB</span></div>
-          <a class="cap" id="dl-link" href="https://github.com/dipanshukasera/smart-keyboard/releases/latest" rel="noopener">Download APK</a>
+          <a class="cap" id="dl-link" href="https://github.com/dipanshukasera/smart-keyboard/releases/latest/download/smart-keyboard.apk" rel="noopener">Download APK</a>
           <p style="font-size:14px;opacity:.85">The file comes from the project's GitHub releases, where older versions and the source code are too.</p>
         </div>
         <ol class="steps rv">
@@ -496,7 +496,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
   <div class="wrap">
     <a class="brand" href="#top"><svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><rect x="0" y="3" width="100" height="97" rx="28" fill="#12172B"/><rect x="12" y="0" width="76" height="79" rx="24" fill="#3355FE"/><path d="M50 21C51.6 32.5 56 37.4 66.5 39.5C56 41.6 51.6 46.5 50 58C48.4 46.5 44 41.6 33.5 39.5C44 37.4 48.4 32.5 50 21Z" fill="#fff"/><circle cx="72" cy="13" r="4" fill="#fff"/></svg><span><b>smart</b>keyboard</span></a>
     <span>Type less. Say more. © 2026 Dipanshu Kasera</span>
-    <span class="links"><a href="#features">Features</a><a href="#get">Download</a><a href="#request">Request a feature</a></span>
+    <span class="links"><a href="#features">Features</a><a href="https://github.com/dipanshukasera/smart-keyboard/releases/latest/download/smart-keyboard.apk" rel="noopener">Download</a><a href="#request">Request a feature</a></span>
   </div>
 </footer>
 <script>
@@ -618,7 +618,6 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
       document.getElementById('dl-date').textContent = 'Released ' + date;
       if (apk) {
         document.getElementById('dl-size').textContent = 'About ' + Math.round(apk.size / 1048576) + ' MB';
-        document.getElementById('dl-link').href = apk.browser_download_url;
       }
     })
     .catch(function () {});
