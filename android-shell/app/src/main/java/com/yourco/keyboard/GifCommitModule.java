@@ -95,22 +95,34 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                         video);
 
                 if (ic != null && !INSTAGRAM.equals(pkg)) {
-                    // Offered to the message box even when the field doesn't
-                    // list video among the types it takes (WhatsApp lists
-                    // only images/GIFs): the app can still accept it, and if
-                    // it does the video lands in the open chat. Called on the
-                    // InputConnection directly - the androidx helper drops it
-                    // before asking whenever the type isn't listed.
-                    ClipDescription description = new ClipDescription("Video", new String[]{"video/mp4", "video/*"});
-                    boolean committed;
+                    // The mp4 goes into the open chat's message box. Which
+                    // type it's labelled with matters: WhatsApp doesn't list
+                    // "video/mp4" but does list "video/x.looping_mp4" - an
+                    // mp4 it plays as a looping, GIF-style clip - which is
+                    // how it takes GIFs from keyboards as video.
+                    String type = null;
                     if (accepts(info, "video/mp4")) {
+                        type = "video/mp4";
+                    } else if (accepts(info, LOOPING_MP4)) {
+                        type = LOOPING_MP4;
+                    }
+                    boolean committed;
+                    if (type != null) {
                         committed = InputConnectionCompat.commitContent(
-                                ic, info, new InputContentInfoCompat(uri, description, null),
+                                ic, info,
+                                new InputContentInfoCompat(uri, new ClipDescription("Video", new String[]{type}), null),
                                 InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
-                    } else {
+                    } else if (EditorInfoCompat.getContentMimeTypes(info).length > 0) {
+                        // The field takes some media but lists no video:
+                        // offer it anyway, directly on the InputConnection
+                        // (the androidx helper drops unlisted types before
+                        // asking). The app may still accept it.
                         committed = ic.commitContent(
-                                new android.view.inputmethod.InputContentInfo(uri, description, null),
+                                new android.view.inputmethod.InputContentInfo(
+                                        uri, new ClipDescription("Video", new String[]{"video/mp4", "video/*"}), null),
                                 InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
+                    } else {
+                        committed = false;
                     }
                     if (committed) {
                         promise.resolve("committed");
@@ -364,6 +376,8 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
     // Apps whose message box refuses GIFs from keyboards but accepts still
     // images - see commitGif.
     private static final String INSTAGRAM = "com.instagram.android";
+    // WhatsApp's name for an mp4 it shows as a looping, GIF-style clip.
+    private static final String LOOPING_MP4 = "video/x.looping_mp4";
     private static final java.util.Set<String> GIF_REFUSING_APPS = java.util.Collections.singleton(INSTAGRAM);
 
     private static void copyFile(File from, File to) throws Exception {
