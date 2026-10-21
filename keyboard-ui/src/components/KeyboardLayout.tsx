@@ -110,6 +110,13 @@ interface KeyboardLayoutProps {
 }
 
 // A row's width in key units (a key's `width`, defaulting to 1).
+// `color` (#RRGGBB) at `alpha`, for the quieter keys of a layout. Anything
+// else (a photo theme's #RRGGBBAA already has transparency) is left alone.
+function dimmed(color: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+  return color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
+
 function rowUnits(row: KeyDef[]): number {
   return row.reduce((sum, keyDef) => sum + (keyDef.width ?? 1), 0);
 }
@@ -276,7 +283,21 @@ function KeyboardLayoutImpl({
     return () => subscription.remove();
   }, [onCommitText, setShiftActive]);
 
-  const layout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
+  const baseLayout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
+  // A layout with extra pages (Hindi's "1/4" key) shows one at a time: page
+  // one is its `rows`, the others replace all but the shared bottom row.
+  const pageCount = 1 + (baseLayout.extraPages?.length ?? 0);
+  const [layoutPage, setLayoutPage] = useState(0);
+  const currentPage = layoutPage < pageCount ? layoutPage : 0;
+  // Each time the language changes it starts on page one again.
+  useEffect(() => setLayoutPage(0), [activeLocale]);
+  const layout = useMemo<LayoutDef>(
+    () =>
+      currentPage === 0 || !baseLayout.extraPages
+        ? baseLayout
+        : {...baseLayout, rows: [...baseLayout.extraPages[currentPage - 1], baseLayout.rows[baseLayout.rows.length - 1]]},
+    [baseLayout, currentPage],
+  );
 
   // The translucent wash (drawn by useKeyPreview's press layer) that reads as "pressed"
   // regardless of which theme's specific key/pressed-background pair is
@@ -449,6 +470,9 @@ function KeyboardLayoutImpl({
         }
         finishWord(currentTypedWord(), true);
         if (currentLastSuggestion()) setLastSuggestion(null);
+        return;
+      case 'page':
+        setLayoutPage((currentPage + 1) % pageCount);
         return;
       case 'symbols':
         trackWord('');
@@ -894,7 +918,10 @@ function KeyboardLayoutImpl({
           {sideInset > 0 && <View pointerEvents="none" style={{flex: sideInset}} />}
           {row.map((keyDef, keyIndex) => {
             const keyId = `${rowIndex}-${keyIndex}`;
-            const keyLabel = isShiftActive ? keyDef.key.toUpperCase() : keyDef.key;
+            const keyLabel = keyDef.label ?? (isShiftActive ? keyDef.key.toUpperCase() : keyDef.key);
+            // The page key reads "1/4", "2/4"... - which page of the layout.
+            const isPageKey = keyDef.action === 'page';
+            const isDimKey = !!keyDef.dim || isPageKey;
             const isPill = keyDef.action === 'symbols';
             const isAccent = keyDef.action === 'enter';
             const isShiftKey = keyDef.action === 'shift';
@@ -904,7 +931,11 @@ function KeyboardLayoutImpl({
             // top row drops its small hint numbers and hold-for-number, and
             // its keys become ordinary letter keys.
             const showNumberHint =
-              !showNumberRow && rowIndex === 0 && !keyDef.action && keyIndex < NUMBER_HINTS.length;
+              !showNumberRow &&
+              layout.numberHints !== false &&
+              rowIndex === 0 &&
+              !keyDef.action &&
+              keyIndex < NUMBER_HINTS.length;
             const iconName = actionIconName(keyDef, enterIcon);
 
             // Resting appearance first (pill/accent/shift-active tinting),
@@ -917,6 +948,7 @@ function KeyboardLayoutImpl({
             if (isPill) backgroundColor = PILL_BACKGROUND;
             else if (isAccent) backgroundColor = theme.accent;
             else if (isShiftKey && isShiftActive) backgroundColor = theme.keyPressedBackground;
+            else if (isDimKey) backgroundColor = dimmed(theme.keyBackground, 0.55);
 
             // A press is drawn over the key by useKeyPreview's layer, so keys
             // don't change (or re-render) when pressed - except delete while
@@ -929,7 +961,9 @@ function KeyboardLayoutImpl({
                 ? '#FFFFFF'
                 : isShiftKey && isShiftActive
                   ? theme.accent
-                  : theme.keyText;
+                  : isDimKey
+                    ? dimmed(theme.keyText, 0.8)
+                    : theme.keyText;
 
 
             // Delete: hold-to-repeat and drag-to-select both need reliable
@@ -983,7 +1017,14 @@ function KeyboardLayoutImpl({
                     {flex: keyDef.width ?? 1, backgroundColor, paddingVertical: keyPaddingVertical},
                   ]}
                   onLayout={trackKeyLayout('space', String(rowIndex))}>
-                  {iconName ? <Icon name={iconName} size={keyIconSize} color={textColor} /> : null}
+                  {iconName ? (
+                    <Icon name={iconName} size={keyIconSize} color={textColor} />
+                  ) : keyDef.label ? (
+                    // The language name (Hindi: "हिन्दी"), as Gboard's space bar shows.
+                    <Text style={{color: dimmed(theme.keyText, 0.8), fontSize: 13 * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>
+                      {keyDef.label}
+                    </Text>
+                  ) : null}
                 </View>
               );
             }
@@ -1024,7 +1065,7 @@ function KeyboardLayoutImpl({
                   <Icon name={iconName} size={keyIconSize} color={textColor} />
                 ) : (
                   <Text style={{color: textColor, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
-                    {isShiftActive ? keyDef.key.toUpperCase() : keyDef.key}
+                    {isPageKey ? `${currentPage + 1}/${pageCount}` : keyLabel}
                   </Text>
                 )}
               </View>
