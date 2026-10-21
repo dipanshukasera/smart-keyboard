@@ -14,7 +14,7 @@ Apps Script web app, which is free and needs no server. About five minutes.
    this one sheet).
 5. Copy the **Web app URL** (it ends in `/exec`).
 6. Open `docs/index.html`, find `var ENDPOINT = '';` and paste the URL between
-   the quotes. Commit and push; the site updates in a minute or two.
+   the quotes. Commit and push; the site updates in a minute or two. Requests go only to the sheet, nothing is posted to GitHub.
 
 To check it: open the web app URL in a browser. It should show "Smart Keyboard
 feature requests: this address accepts form posts." Then send a request from

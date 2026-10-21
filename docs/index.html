@@ -104,6 +104,7 @@ a { color: inherit; }
 }
 .cap:hover { transform: translateY(-1px); box-shadow: 0 6px 0 var(--edge); }
 .cap:active { transform: translateY(5px); box-shadow: 0 0 0 var(--edge); }
+.cap:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: 0 5px 0 var(--edge); }
 .cap.quiet { --face: var(--surface); --edge: var(--key-edge); --txt: var(--ink); border: 1px solid var(--line); }
 .cap.small { min-height: 40px; padding: 0 18px; font-size: 14px; border-radius: 11px; box-shadow: 0 4px 0 var(--edge); }
 .cap.small:active { transform: translateY(4px); }
@@ -486,7 +487,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
           <button class="cap" type="submit" id="send">Send request</button>
           <span class="status" id="status" role="status" aria-live="polite"></span>
         </div>
-        <p class="note" id="note">This opens your request on GitHub, ready to submit (a free GitHub account is needed).</p>
+        <p class="note" id="note"></p>
       </form>
     </div>
   </section>
@@ -580,10 +581,10 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
   } else { rv.forEach(function (el) { el.classList.add('in'); }); }
 
   /* ---------- request form ---------- */
-  var ENDPOINT = ''; // paste the Google Apps Script web app URL here to send requests to the Google Sheet instead
+  var ENDPOINT = ''; // paste the Google Apps Script web app URL here: requests go to the Google Sheet
   var REPO = 'dipanshukasera/smart-keyboard';
   var form = document.getElementById('reqform'), status = document.getElementById('status'), btn = document.getElementById('send'), note = document.getElementById('note');
-  if (ENDPOINT) note.hidden = true; else btn.textContent = 'Open request on GitHub';
+  if (ENDPOINT) { note.hidden = true; } else { btn.disabled = true; btn.textContent = 'Opening soon'; note.textContent = 'The request form is being connected. Please check back soon.'; }
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     status.className = 'status';
@@ -593,13 +594,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
     if (form.website.value) { return; }
     btn.disabled = true; status.textContent = 'Sending...';
     var done = function () { status.textContent = 'Thanks, your request is on the list.'; status.className = 'status ok'; form.reset(); btn.disabled = false; };
-    if (!ENDPOINT) {
-      // Until the sheet is connected: a pre-filled GitHub request in a new tab.
-      var text = details + '\n\nArea: ' + form.category.value + (form.name.value.trim() ? '\nFrom: ' + form.name.value.trim() : '');
-      var url = 'https://github.com/' + REPO + '/issues/new?labels=feature-request&title=' + encodeURIComponent('Feature request: ' + title) + '&body=' + encodeURIComponent(text);
-      window.open(url, '_blank', 'noopener');
-      status.textContent = 'Opened on GitHub. Press Submit there to send it.'; status.className = 'status ok'; btn.disabled = false; return;
-    }
+    if (!ENDPOINT) { status.textContent = 'Requests are not open yet. Please check back soon.'; status.className = 'status err'; btn.disabled = false; return; }
     var body = new URLSearchParams(new FormData(form)); body.append('submitted_at', new Date().toISOString());
     fetch(ENDPOINT, { method: 'POST', mode: 'no-cors', body: body }).then(done).catch(function () { status.textContent = 'Could not send. Please try again in a moment.'; status.className = 'status err'; btn.disabled = false; });
   });
