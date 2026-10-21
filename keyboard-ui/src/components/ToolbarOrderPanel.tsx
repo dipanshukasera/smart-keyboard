@@ -11,6 +11,7 @@ const TOOL_META: Record<ToolId, {label: string; iconName: string}> = {
   themes: {label: 'Themes', iconName: 'contrast'},
   brightness: {label: 'Brightness', iconName: 'wb-sunny'},
   emoji: {label: 'Emoji', iconName: 'mood'},
+  voice: {label: 'Voice typing', iconName: 'mic'},
 };
 
 // Reorders the toolbar row via up/down buttons rather than drag handles -

@@ -27,6 +27,7 @@ import {AllToolsSheet} from './components/AllToolsSheet';
 import {FontPanel} from './components/FontPanel';
 import {SettingsPanel} from './components/SettingsPanel';
 import {ToolbarOrderPanel} from './components/ToolbarOrderPanel';
+import {VoicePanel} from './components/VoicePanel';
 import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
 import {useHindiSuggestion} from './hooks/useHindiSuggestion';
@@ -102,6 +103,16 @@ export default function App() {
     return () => subscription.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setSensitiveField, setNumericField, resetTypingSession]);
+
+  // The microphone prompt (first voice typing use) opens over the app, which
+  // hides the keyboard and resets it to letters. Once it's allowed, go
+  // straight back to voice typing - that's what the user was doing.
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('onVoiceEvent', (event: {type: string; granted?: boolean}) => {
+      if (event.type === 'permission' && event.granted) setActivePanel('voice');
+    });
+    return () => subscription.remove();
+  }, [setActivePanel]);
 
   // Emitted (ImeService.onUpdateSelection) whenever the cursor arrives at
   // the very start of the field: the user deleted everything, selected all
@@ -236,6 +247,8 @@ export default function App() {
         return <SettingsPanel />;
       case 'toolbarOrder':
         return <ToolbarOrderPanel />;
+      case 'voice':
+        return <VoicePanel />;
       case 'keyboard':
       default:
         return <KeyboardLayout />;
@@ -361,6 +374,9 @@ export default function App() {
                       case 'emoji':
                         setActivePanel('emoji');
                         return;
+                      case 'voice':
+                        setActivePanel('voice');
+                        return;
                     }
                   }}
                 />
@@ -419,6 +435,7 @@ function ToolRow({
     themes: 'contrast',
     brightness: 'wb-sunny',
     emoji: 'mood',
+    voice: 'mic',
   };
   // Brightness has no separate "on" screen to reflect its state - the
   // number of dots below the icon says which of the three dim steps is

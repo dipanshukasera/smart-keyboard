@@ -4,10 +4,15 @@ interface GifCommitNative {
   isRichContentSupported(): Promise<boolean>;
   acceptsUrl(remoteUrl: string): Promise<boolean>;
   focusedPackage(): Promise<string | null>;
-  shareVideoToInstagram(videoUrl: string): Promise<boolean>;
+  sendVideo(videoUrl: string): Promise<VideoSendResult>;
+  acceptsAnimatedGif(): Promise<boolean>;
   commitGif(remoteUrl: string): Promise<boolean>;
   cacheGif(remoteUrl: string): Promise<string>;
 }
+
+// committed: typed into the message box; shared: the app's own share
+// screen opened with it; none: the app takes video neither way.
+export type VideoSendResult = 'committed' | 'shared' | 'none';
 
 const native = NativeModules.GifCommitModule as GifCommitNative | undefined;
 
@@ -31,12 +36,24 @@ export const GifCommit = {
     }
   },
 
-  // Opens Instagram's "share to chats" screen with this mp4 (see
-  // GifCommitModule.shareVideoToInstagram). False if that couldn't open.
-  async shareVideoToInstagram(videoUrl: string): Promise<boolean> {
+  // Sends an mp4 as a video to the app being typed into - into its message
+  // box if it takes video there, else through its own share screen (see
+  // GifCommitModule.sendVideo).
+  async sendVideo(videoUrl: string): Promise<VideoSendResult> {
+    if (!native) return 'none';
+    try {
+      return await native.sendVideo(videoUrl);
+    } catch {
+      return 'none';
+    }
+  },
+
+  // Whether an animated GIF can go straight into the focused field (false
+  // for apps like Instagram that refuse keyboard GIFs).
+  async acceptsAnimatedGif(): Promise<boolean> {
     if (!native) return false;
     try {
-      return await native.shareVideoToInstagram(videoUrl);
+      return await native.acceptsAnimatedGif();
     } catch {
       return false;
     }

@@ -30,12 +30,10 @@ interface GifResult {
   // only come from an mp4. Absent for GIF/sticker results, which are
   // animated images that <Image> handles directly.
   videoUrl?: string | null;
-  // The same GIF as an mp4 (Klipy/Tenor). Only used for Instagram, which
-  // refuses GIFs from keyboards but takes a video through its share screen.
+  // The same GIF as an mp4 (Klipy/Tenor) - sent as a video to apps that
+  // can't take a moving GIF, or on long-press (see selectGif/sendAsVideo).
   mp4Url?: string | null;
 }
-
-const INSTAGRAM = 'com.instagram.android';
 
 // 'adult' is only reachable when the user has switched "Adult GIFs (18+)"
 // on in the settings panel - its tab isn't rendered otherwise, and it maps
@@ -408,12 +406,9 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     try {
       let sent: boolean;
       if (kind === 'video') {
-        // Instagram takes video only through its share screen (see
-        // GifCommitModule.shareVideoToInstagram).
-        sent =
-          (await GifCommit.focusedPackage()) === INSTAGRAM
-            ? await GifCommit.shareVideoToInstagram(item.videoUrl)
-            : await GifCommit.commitGif(item.videoUrl);
+        // Into the message box where the app takes video, else through the
+        // app's own share screen (GifCommitModule.sendVideo).
+        sent = (await GifCommit.sendVideo(item.videoUrl)) !== 'none';
         if (!sent) {
           // Say so rather than quietly sending something else - the GIF
           // button is right there.
@@ -448,47 +443,41 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 1800);
   };
 
-  // Which file a send of `gif` will use. GIFs and stickers: the preview-size
-  // file the grid has already downloaded, so it sends in milliseconds
-  // (GifCommitModule copies it out of the image cache; the full-size file is
-  // 0.5-10MB). 18+ items are mp4 (Redgifs has no GIF), and far fewer fields
-  // accept video than images: the mp4 where the field takes video, else a
-  // real .gif converted from it on the backend, else the still frame.
-  //
-  // Instagram is the exception: it refuses GIFs and videos a keyboard puts
-  // in its message box, and a GIF sent as an image arrives frozen. A GIF or
-  // 18+ clip there goes as its mp4, through Instagram's own "share to
-  // chats" screen (see selectGif) - it arrives as a tap-to-play video.
-  // Stickers stay still images there: as video they'd lose their
-  // transparent background.
-  const sendUrlFor = async (gif: GifResult): Promise<string> => {
-    const video = gif.mp4Url ?? gif.videoUrl;
-    if (video && contentType !== 'sticker' && (await GifCommit.focusedPackage()) === INSTAGRAM) {
-      return video;
-    }
+  // GIFs and stickers send the preview-size file the grid has already
+  // downloaded, so it goes in milliseconds (GifCommitModule copies it out of
+  // the image cache; the full-size file is 0.5-10MB). 18+ items are mp4
+  // (Redgifs has no GIF): the mp4 where the field takes video, else a real
+  // .gif converted from it on the backend, else the still frame.
+  const gifSendUrlFor = async (gif: GifResult): Promise<string> => {
     if (!gif.videoUrl) return gif.previewUrl;
     if (await GifCommit.acceptsUrl(gif.videoUrl)) return gif.videoUrl;
     if (await GifCommit.isRichContentSupported()) return convertedGifUrl(gif.videoUrl);
     return gif.fullUrl;
   };
 
+  // A GIF's mp4 (Klipy/Tenor give one alongside the GIF; an 18+ clip is one).
+  const videoFor = (gif: GifResult) => gif.mp4Url ?? gif.videoUrl ?? null;
+
   const selectGif = async (gif: GifResult) => {
-    // Sends the file into the focused field (this is how Instagram DMs,
-    // WhatsApp, Telegram etc. actually receive a GIF - a pasted URL isn't a
-    // GIF as far as they're concerned). If that fails, an 18+ clip falls
-    // back to its still frame, and only then to copying a link.
     const stillUrl = gif.videoUrl ? gif.fullUrl : gif.previewUrl;
-    const url = await sendUrlFor(gif);
-    const viaInstagramShare = url === (gif.mp4Url ?? gif.videoUrl) && (await GifCommit.focusedPackage()) === INSTAGRAM;
-    // Instagram's mp4 route: open its share screen, where the user picks
-    // the chat. If that can't open, go straight to the still image -
-    // committing the video to Instagram's box would "succeed" and send
-    // nothing.
-    if (viaInstagramShare && (await GifCommit.shareVideoToInstagram(url))) {
-      cacheForOffline(gif, stillUrl);
-      return;
+    // An app that can't take a moving GIF from a keyboard (no GIF support
+    // in its message box, or one like Instagram that refuses them) gets the
+    // GIF as a video instead of a frozen picture - into its box if it takes
+    // video there, else through its own share screen. Stickers stay
+    // images: as video they'd lose their transparent background.
+    const video = videoFor(gif);
+    if (video && contentType !== 'sticker' && !(await GifCommit.acceptsAnimatedGif())) {
+      if ((await GifCommit.sendVideo(video)) !== 'none') {
+        cacheForOffline(gif, stillUrl);
+        return;
+      }
     }
-    let sentUrl: string | null = !viaInstagramShare && (await GifCommit.commitGif(url)) ? url : null;
+    // Otherwise the file goes into the focused field (how WhatsApp,
+    // Telegram etc. actually receive a GIF - a pasted URL isn't a GIF to
+    // them). If that fails, an 18+ clip falls back to its still frame, and
+    // only then to copying a link.
+    const url = await gifSendUrlFor(gif);
+    let sentUrl: string | null = (await GifCommit.commitGif(url)) ? url : null;
     if (!sentUrl && url !== stillUrl && (await GifCommit.commitGif(stillUrl))) {
       sentUrl = stillUrl;
     }
@@ -501,6 +490,20 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     // A converted GIF is already sitting in the native download cache, so
     // the recents entry can be the animation rather than the still frame.
     cacheForOffline(gif, sentUrl && sentUrl !== gif.videoUrl ? sentUrl : stillUrl);
+  };
+
+  // Long-press: send as a video in any app that takes one, even where a GIF
+  // would have gone in as a GIF.
+  const sendAsVideo = async (gif: GifResult) => {
+    const video = videoFor(gif);
+    if (!video) return;
+    showFeedback('Sending as video…');
+    if ((await GifCommit.sendVideo(video)) === 'none') {
+      showFeedback('This app doesn’t take videos');
+      return;
+    }
+    setFeedback(null);
+    cacheForOffline(gif, gif.videoUrl ? gif.fullUrl : gif.previewUrl);
   };
 
   // "Used" (searched-for and tapped, not merely scrolled past) is the
@@ -747,7 +750,9 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       ) : (
         <>
           {!query.trim() && results.length > 0 && (
-            <Text style={[styles.trendingLabel, {color: theme.keyText + '99'}]}>TRENDING</Text>
+            <Text style={[styles.trendingLabel, {color: theme.keyText + '99'}]}>
+              {contentType === 'sticker' ? 'TRENDING' : 'TRENDING · HOLD ONE TO SEND AS VIDEO'}
+            </Text>
           )}
           <FlatList
             data={results}
@@ -763,7 +768,10 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
             // effectively never seen. Paging is the button's job now.
             ListFooterComponent={renderGridFooter()}
             renderItem={({item}) => (
-              <TouchableOpacity style={styles.cell} onPress={() => onResultPress(item)}>
+              <TouchableOpacity
+                style={styles.cell}
+                onPress={() => onResultPress(item)}
+                onLongPress={contentType !== 'sticker' && videoFor(item) ? () => sendAsVideo(item) : undefined}>
                 <GifThumb uri={item.previewUrl} pulse={skeletonPulse} skeletonColor={skeletonColor} />
                 {/* Video results (18+) show their still frame rather than
                     autoplaying - a grid of ~78 live players spun up ~78

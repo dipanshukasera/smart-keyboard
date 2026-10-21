@@ -4,6 +4,9 @@ import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -26,6 +29,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -62,38 +66,80 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
         promise.resolve(info != null ? info.packageName : null);
     }
 
-    // Instagram plays nothing a keyboard puts in its message box: GIFs are
-    // refused, videos silently dropped, images arrive frozen. The one way a
-    // keyboard's GIF arrives moving is as a video message, sent through
-    // Instagram's own "share to chats" screen - so this downloads the clip's
-    // mp4 and opens that screen with it; the user picks the chat and taps
-    // Send. It arrives as a tap-to-play video. Read access to the one file
-    // is granted on the intent, so Instagram needs no storage permission.
+    // Sends a GIF's mp4 as a video to whichever app is being typed into:
+    //  - "committed": straight into the message box, when the field says it
+    //    takes video (commitContent, like a GIF);
+    //  - "shared": otherwise through that app's own share screen (ACTION_SEND
+    //    video/mp4, limited to the focused app) - the user picks the chat and
+    //    taps send there. Instagram plays nothing a keyboard puts in its box,
+    //    so it always goes this way, to its "share to chats" screen;
+    //  - "none": the app takes video neither way (the caller falls back).
+    // Read access to the one file is granted on the intent, so the receiving
+    // app needs no storage permission.
     @ReactMethod
-    public void shareVideoToInstagram(String videoUrl, Promise promise) {
+    public void sendVideo(String videoUrl, Promise promise) {
         new Thread(() -> {
             try {
+                EditorInfo info = InputConnectionHolder.editorInfo();
+                InputConnection ic = InputConnectionHolder.get();
+                String pkg = info != null ? info.packageName : null;
+                if (pkg == null) {
+                    promise.resolve("none");
+                    return;
+                }
                 File video = downloadToCache(videoUrl);
                 Uri uri = FileProvider.getUriForFile(
                         getReactApplicationContext(),
                         getReactApplicationContext().getPackageName() + ".fileprovider",
                         video);
+
+                if (ic != null && !INSTAGRAM.equals(pkg) && accepts(info, "video/mp4")) {
+                    InputContentInfoCompat contentInfo = new InputContentInfoCompat(
+                            uri, new ClipDescription("Video", new String[]{"video/mp4", "video/*"}), null);
+                    if (InputConnectionCompat.commitContent(
+                            ic, info, contentInfo, InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)) {
+                        promise.resolve("committed");
+                        return;
+                    }
+                }
+
                 Intent share = new Intent(Intent.ACTION_SEND);
                 share.setType("video/mp4");
                 share.putExtra(Intent.EXTRA_STREAM, uri);
                 share.setClipData(ClipData.newRawUri("", uri));
-                share.setComponent(new ComponentName(
-                        "com.instagram.android",
-                        "com.instagram.direct.share.handler.DirectExternalMediaShareActivityVideo"));
                 share.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                if (INSTAGRAM.equals(pkg)) {
+                    share.setComponent(new ComponentName(
+                            INSTAGRAM, "com.instagram.direct.share.handler.DirectExternalMediaShareActivityVideo"));
+                } else {
+                    share.setPackage(pkg);
+                    PackageManager pm = getReactApplicationContext().getPackageManager();
+                    List<ResolveInfo> targets = pm.queryIntentActivities(share, 0);
+                    if (targets.isEmpty()) {
+                        promise.resolve("none");
+                        return;
+                    }
+                    // An app can have several share targets (e.g. a chat
+                    // and a status/story one) - the first is its main one.
+                    ActivityInfo target = targets.get(0).activityInfo;
+                    share.setComponent(new ComponentName(target.packageName, target.name));
+                }
                 getReactApplicationContext().startActivity(share);
-                promise.resolve(true);
+                promise.resolve("shared");
             } catch (Exception e) {
-                // No Instagram, an older version without this screen, or the
-                // download failed - the caller falls back to a still image.
-                promise.resolve(false);
+                // Download failed, or the app's share screen couldn't open.
+                promise.resolve("none");
             }
         }).start();
+    }
+
+    // Whether the focused field takes an animated GIF from a keyboard - false
+    // for apps that refuse them (Instagram), where a GIF is better sent as
+    // video (sendVideo) than frozen as a still image.
+    @ReactMethod
+    public void acceptsAnimatedGif(Promise promise) {
+        EditorInfo info = InputConnectionHolder.editorInfo();
+        promise.resolve(info != null && accepts(info, "image/gif") && !GIF_REFUSING_APPS.contains(info.packageName));
     }
 
     // Whether the focused field would accept this URL's content type (video
@@ -272,8 +318,8 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
 
     // Apps whose message box refuses GIFs from keyboards but accepts still
     // images - see commitGif.
-    private static final java.util.Set<String> GIF_REFUSING_APPS =
-            java.util.Collections.singleton("com.instagram.android");
+    private static final String INSTAGRAM = "com.instagram.android";
+    private static final java.util.Set<String> GIF_REFUSING_APPS = java.util.Collections.singleton(INSTAGRAM);
 
     private static void copyFile(File from, File to) throws Exception {
         File partFile = new File(to.getPath() + ".part");

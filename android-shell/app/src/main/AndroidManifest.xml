@@ -3,6 +3,23 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Voice typing (VoiceInputModule). Asked for the first time the mic
+         is tapped, via MicPermissionActivity. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Android 11+ only lets an app see the others it declares here:
+         share screens that take a video (GifCommitModule.sendVideo sends a
+         GIF's mp4 through the focused app's), and the speech recognition
+         service voice typing binds to. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="video/*" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <!-- true so the Metro dev server (plain ws/http to 10.0.2.2) and local
          backend are reachable during development. Before shipping a release
@@ -36,6 +53,15 @@
              behalf (see PickBackgroundActivity). Invisible itself. -->
         <activity
             android:name=".PickBackgroundActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Asks for the microphone on the IME's behalf the first time voice
+             typing is used (an IME can't show the permission prompt). -->
+        <activity
+            android:name=".MicPermissionActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""

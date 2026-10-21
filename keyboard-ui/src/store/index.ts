@@ -22,14 +22,15 @@ export type PanelType =
   | 'allTools'
   | 'font'
   | 'settings'
-  | 'toolbarOrder';
+  | 'toolbarOrder'
+  | 'voice';
 export type OneHandedMode = 'off' | 'left' | 'right';
 
 // Every tool the "All tools" grid and the toolbar's own row can show - a
 // single id space so both share one persisted order (see toolbarOrder)
 // instead of drifting into two different lists of "the same" tools.
-export type ToolId = 'gif' | 'translate' | 'clipboard' | 'themes' | 'brightness' | 'emoji';
-export const ALL_TOOL_IDS: ToolId[] = ['gif', 'translate', 'clipboard', 'themes', 'brightness', 'emoji'];
+export type ToolId = 'gif' | 'translate' | 'clipboard' | 'themes' | 'brightness' | 'emoji' | 'voice';
+export const ALL_TOOL_IDS: ToolId[] = ['gif', 'translate', 'clipboard', 'themes', 'brightness', 'emoji', 'voice'];
 // Three flat steps rather than a slider (no slider component is installed,
 // and adding one for a single control isn't worth a new native dependency)
 // - tapping the brightness icon cycles through these, dimming the keyboard

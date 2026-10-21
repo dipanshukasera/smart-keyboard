@@ -29,6 +29,7 @@ export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) 
     ...(adultGifsEnabled
       ? [{id: 'adult', label: '18+', iconName: 'no-adult-content', onPress: () => setActivePanel('adultGifs')}]
       : []),
+    {id: 'voice', label: 'Voice typing', iconName: 'mic', onPress: () => setActivePanel('voice')},
     {id: 'clipboard', label: 'Clipboard', iconName: 'content-paste', onPress: onOpenClipboard},
     {id: 'translate', label: 'Translate', iconName: 'translate', onPress: () => setActivePanel('translate')},
     {id: 'themes', label: 'Themes', iconName: 'contrast', onPress: () => setActivePanel('themeCustomizer')},
