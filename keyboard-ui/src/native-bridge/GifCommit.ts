@@ -11,9 +11,10 @@ interface GifCommitNative {
   cacheGif(remoteUrl: string): Promise<string>;
 }
 
-// committed: typed into the message box; shared: the app's own share
-// screen opened with it; none: the app takes video neither way.
-export type VideoSendResult = 'committed' | 'shared' | 'none';
+// committed: typed into the message box; gif: the app takes GIFs but no
+// video, so nothing was sent - send the GIF instead; shared: the app's own
+// share screen opened with it; none: no way to deliver it.
+export type VideoSendResult = 'committed' | 'gif' | 'shared' | 'none';
 
 const native = NativeModules.GifCommitModule as GifCommitNative | undefined;
 

@@ -67,14 +67,19 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
     }
 
     // Sends a GIF's mp4 as a video to whichever app is being typed into:
-    //  - "committed": straight into the open chat's message box, if the app
-    //    takes the video there (commitContent, like a GIF - offered even
-    //    when the field doesn't list video, see below);
-    //  - "shared": otherwise through that app's own share screen (ACTION_SEND
-    //    video/mp4, limited to the focused app) - the user picks the chat and
-    //    taps send there. Instagram plays nothing a keyboard puts in its box,
-    //    so it always goes this way, to its "share to chats" screen;
-    //  - "none": the app takes video neither way (the caller falls back).
+    //  - "committed": straight into the open chat's message box. Only when
+    //    the app lists a video type it takes there (video/mp4, or WhatsApp's
+    //    video/x.looping_mp4). An unlisted offer is no use: Telegram lists
+    //    only images, and treats a video handed to it as a picture - "unsupported
+    //    type";
+    //  - "gif": the app takes GIFs but no video (Telegram...) - nothing was
+    //    sent; the caller sends the GIF, which such apps turn into their own
+    //    looping video anyway;
+    //  - "shared": the app takes neither, so its own share screen opened with
+    //    the mp4 (ACTION_SEND video/mp4, limited to the focused app) and the
+    //    user picks the chat there. Instagram always goes this way, to its
+    //    "share to chats" screen;
+    //  - "none": no way to deliver it (the caller falls back).
     // Read access to the one file is granted on the intent, so the receiving
     // app needs no storage permission.
     @ReactMethod
@@ -88,42 +93,33 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                     promise.resolve("none");
                     return;
                 }
+                // Which video type the message box lists, if any. WhatsApp
+                // doesn't list "video/mp4" but does list "video/x.looping_mp4"
+                // - an mp4 it plays as a looping, GIF-style clip.
+                String type = null;
+                if (!INSTAGRAM.equals(pkg)) {
+                    if (accepts(info, "video/mp4")) {
+                        type = "video/mp4";
+                    } else if (accepts(info, LOOPING_MP4)) {
+                        type = LOOPING_MP4;
+                    }
+                }
+                if (type == null && !INSTAGRAM.equals(pkg) && accepts(info, "image/gif")) {
+                    promise.resolve("gif");
+                    return;
+                }
+
                 File video = downloadToCache(videoUrl);
                 Uri uri = FileProvider.getUriForFile(
                         getReactApplicationContext(),
                         getReactApplicationContext().getPackageName() + ".fileprovider",
                         video);
 
-                if (ic != null && !INSTAGRAM.equals(pkg)) {
-                    // The mp4 goes into the open chat's message box. Which
-                    // type it's labelled with matters: WhatsApp doesn't list
-                    // "video/mp4" but does list "video/x.looping_mp4" - an
-                    // mp4 it plays as a looping, GIF-style clip - which is
-                    // how it takes GIFs from keyboards as video.
-                    String type = null;
-                    if (accepts(info, "video/mp4")) {
-                        type = "video/mp4";
-                    } else if (accepts(info, LOOPING_MP4)) {
-                        type = LOOPING_MP4;
-                    }
-                    boolean committed;
-                    if (type != null) {
-                        committed = InputConnectionCompat.commitContent(
-                                ic, info,
-                                new InputContentInfoCompat(uri, new ClipDescription("Video", new String[]{type}), null),
-                                InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
-                    } else if (EditorInfoCompat.getContentMimeTypes(info).length > 0) {
-                        // The field takes some media but lists no video:
-                        // offer it anyway, directly on the InputConnection
-                        // (the androidx helper drops unlisted types before
-                        // asking). The app may still accept it.
-                        committed = ic.commitContent(
-                                new android.view.inputmethod.InputContentInfo(
-                                        uri, new ClipDescription("Video", new String[]{"video/mp4", "video/*"}), null),
-                                InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
-                    } else {
-                        committed = false;
-                    }
+                if (ic != null && type != null) {
+                    boolean committed = InputConnectionCompat.commitContent(
+                            ic, info,
+                            new InputContentInfoCompat(uri, new ClipDescription("Video", new String[]{type}), null),
+                            InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
                     if (committed) {
                         promise.resolve("committed");
                         return;

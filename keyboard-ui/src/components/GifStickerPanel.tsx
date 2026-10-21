@@ -404,25 +404,33 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     if (!item?.videoUrl || previewSending) return;
     setPreviewSending(kind);
     try {
-      let sent: boolean;
+      let sent = false;
+      // An app that takes GIFs but no video (Telegram) gets the GIF for
+      // "Send video" too - it plays it as a looping video itself.
+      let asGif = kind === 'gif';
       if (kind === 'video') {
-        // Always the mp4 itself, never converted: into the open chat if the
-        // app takes it there, else through the app's share screen (the only
+        // The mp4 itself, never converted: into the open chat if the app
+        // takes video there, else through the app's share screen (the only
         // other way a keyboard can deliver a video - see sendVideo).
-        sent = (await GifCommit.sendVideo(item.videoUrl)) !== 'none';
-        if (!sent) {
+        const result = await GifCommit.sendVideo(item.videoUrl);
+        if (result === 'gif') {
+          asGif = true;
+        } else if (result === 'none') {
           // Say so rather than quietly sending something else - the GIF
           // button is right there.
           showFeedback('This app doesn’t take videos - try Send GIF');
           return;
+        } else {
+          sent = true;
         }
-      } else {
+      }
+      if (asGif) {
         sent = await GifCommit.commitGif(convertedGifUrl(item.videoUrl));
         if (!sent && !(await GifCommit.commitGif(item.fullUrl))) {
           await copyForPasting(convertedGifUrl(item.videoUrl), item.videoUrl);
         }
       }
-      cacheForOffline(item, kind === 'gif' && sent ? convertedGifUrl(item.videoUrl) : item.fullUrl);
+      cacheForOffline(item, asGif && sent ? convertedGifUrl(item.videoUrl) : item.fullUrl);
       setPreviewItem(null);
     } finally {
       setPreviewSending(null);
@@ -481,7 +489,8 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     // images: as video they'd lose their transparent background.
     const video = videoFor(gif);
     if (video && contentType !== 'sticker' && !(await GifCommit.acceptsAnimatedGif())) {
-      if ((await GifCommit.sendVideo(video)) !== 'none') {
+      const result = await GifCommit.sendVideo(video);
+      if (result === 'committed' || result === 'shared') {
         cacheForOffline(gif, stillUrl);
         return;
       }
@@ -511,7 +520,14 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     const video = videoFor(gif);
     if (!video) return;
     showFeedback('Sending as video…');
-    if ((await GifCommit.sendVideo(video)) === 'none') {
+    const result = await GifCommit.sendVideo(video);
+    if (result === 'gif') {
+      // The app takes GIFs but no video (Telegram): the GIF it is.
+      setFeedback(null);
+      selectGif(gif);
+      return;
+    }
+    if (result === 'none') {
       showFeedback('This app doesn’t take videos');
       return;
     }
