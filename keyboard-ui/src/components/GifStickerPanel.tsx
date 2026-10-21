@@ -15,6 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Video from 'react-native-video';
 import {useKeyboardStore} from '../store';
+import type {CachedGifEntry} from '../store';
 import {API_BASE_URL, apiClient} from '../services/api';
 import {KeyboardLayout} from './KeyboardLayout';
 import {ExpressionModeBar} from './ExpressionModeBar';
@@ -107,6 +108,10 @@ const SEARCH_PLACEHOLDER: Record<ContentType, string> = {
   adult: 'Search 18+ GIFs',
 };
 
+function isForTab(entry: CachedGifEntry, contentType: ContentType): boolean {
+  return entry.kind ? entry.kind === contentType : (contentType === 'adult') === entry.id.startsWith('adult:');
+}
+
 export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   const {theme, recentGifs, addRecentGif} = useKeyboardStore();
   // A keyboard's own window can't summon another system keyboard on top of
@@ -119,8 +124,11 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   const [isTyping, setIsTyping] = useState(false);
   const [query, setQuery] = useState('');
   // Which tag chip is active: a default tag (then `query` holds it too),
-  // RECENT_TAG, or null.
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  // RECENT_TAG, or null. Opens on Recent when this tab has any - those
+  // show instantly from the on-device cache while trending still loads.
+  const [selectedTag, setSelectedTag] = useState<string | null>(() =>
+    recentGifs.some(entry => isForTab(entry, contentType)) ? RECENT_TAG : null,
+  );
   // The 18+ clip being previewed before sending (see renderVideoPreview).
   const [previewItem, setPreviewItem] = useState<GifResult | null>(null);
   const [previewReady, setPreviewReady] = useState(false);
@@ -430,9 +438,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   // older ones don't, so for those 18+ is told apart by the "adult:" id
   // prefix its provider gives (see queryAllProviders) and the rest show
   // under both GIFs and Stickers. 18+ never shows outside the 18+ panel.
-  const tabRecents = recentGifs.filter(entry =>
-    entry.kind ? entry.kind === contentType : (contentType === 'adult') === entry.id.startsWith('adult:'),
-  );
+  const tabRecents = recentGifs.filter(entry => isForTab(entry, contentType));
 
   const showFeedback = (message: string) => {
     if (feedbackTimeoutRef.current) {

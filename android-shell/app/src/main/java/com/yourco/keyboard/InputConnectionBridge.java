@@ -78,6 +78,14 @@ public class InputConnectionBridge extends ReactContextBaseJavaModule {
             promise.resolve("unspecified");
             return;
         }
+        // Chat apps' message boxes often declare "send" but also set
+        // IME_FLAG_NO_ENTER_ACTION, meaning enter should start a new line
+        // (and sendEnter does exactly that) - so show the newline icon,
+        // not a send arrow that doesn't send.
+        if ((info.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0) {
+            promise.resolve("unspecified");
+            return;
+        }
         int action = info.imeOptions & EditorInfo.IME_MASK_ACTION;
         switch (action) {
             case EditorInfo.IME_ACTION_SEARCH:

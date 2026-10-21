@@ -242,11 +242,17 @@ function KeyboardLayoutImpl({
   useEffect(() => {
     // Only meaningful for the real, non-redirected instance - GifStickerPanel's
     // reused instance always overrides onEnter with its own search action.
-    if (!onEnter) {
+    if (onEnter) return;
+    const refresh = () => {
       InputConnection.getImeAction()
         .then(action => setEnterIcon(ENTER_ICON_BY_ACTION[action]))
         .catch(() => {});
-    }
+    };
+    refresh();
+    // Again for each newly focused field - the keyboard stays mounted
+    // across fields, so a search box's icon used to stick for the next one.
+    const subscription = DeviceEventEmitter.addListener('onInputFieldChanged', refresh);
+    return () => subscription.remove();
   }, [onEnter]);
 
   // Auto-capitalization, start-of-field case: Gboard capitalizes the very
@@ -342,6 +348,10 @@ function KeyboardLayoutImpl({
     commitText(lastSuggestion.original);
     trackWord(lastSuggestion.original);
     setLastSuggestion(null);
+    // Undoing a fix means the word was meant: don't fix it again on the
+    // next space, and learn it so it isn't "fixed" in future either.
+    useKeyboardStore.setState({autoCorrection: null});
+    if (effectiveShowSuggestions) learnWord(lastSuggestion.original);
     return true;
   };
 
@@ -384,6 +394,23 @@ function KeyboardLayoutImpl({
           endsSentence = true;
           spaceTypedRef.current = 'period';
         } else {
+          // Auto-correct (Settings): an obvious typo in the word just
+          // finished is swapped for the fix the strip was offering.
+          const {autoCorrectEnabled, autoCorrection} = useKeyboardStore.getState();
+          const typed = currentTypedWord();
+          if (autoCorrectEnabled && autoCorrection && effectiveShowSuggestions && !onCommitText && typed) {
+            deleteBackward(typed.length);
+            commitText(autoCorrection + ' ');
+            lastSpaceTimeRef.current = now;
+            spaceTypedRef.current = 'space';
+            if (endsSentence) setShiftActive(true);
+            pendingSentenceEndRef.current = false;
+            trackWord('');
+            // Backspace straight after puts the typed word back (see
+            // maybeUndoSuggestion), as with a tapped suggestion.
+            setLastSuggestion({original: typed, applied: autoCorrection});
+            return;
+          }
           commitText(' ');
           lastSpaceTimeRef.current = now;
           spaceTypedRef.current = 'space';

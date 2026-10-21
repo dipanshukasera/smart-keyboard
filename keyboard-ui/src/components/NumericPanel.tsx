@@ -1,5 +1,5 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {DeviceEventEmitter, findNodeHandle, GestureResponderEvent, StyleSheet, Text, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useShallow} from 'zustand/react/shallow';
 import {useKeyboardStore} from '../store';
@@ -8,6 +8,7 @@ import {ENTER_ICON_BY_ACTION} from './KeyboardLayout';
 import {keyDecor} from '../themes/keyStyle';
 import {HoldRepeatKeyView} from './HoldRepeatKeyView';
 import {useKeyFeedback} from '../hooks/useKeyFeedback';
+import {useKeyPreview} from '../hooks/useKeyPreview';
 
 // Hold-to-repeat delay/interval, matching KeyboardLayout's main-keyboard
 // delete key - see HoldRepeatKeyView.java for why this is a native touch
@@ -41,17 +42,21 @@ export function NumericPanel() {
   const [enterIcon, setEnterIcon] = useState('keyboard-return');
 
   useEffect(() => {
-    InputConnection.getImeAction()
-      .then(action => setEnterIcon(ENTER_ICON_BY_ACTION[action]))
-      .catch(() => {});
+    const refresh = () => {
+      InputConnection.getImeAction()
+        .then(action => setEnterIcon(ENTER_ICON_BY_ACTION[action]))
+        .catch(() => {});
+    };
+    refresh();
+    const subscription = DeviceEventEmitter.addListener('onInputFieldChanged', refresh);
+    return () => subscription.remove();
   }, []);
 
   // Sound/vibration on every key, same as the letter keyboard.
   const fireKeyFeedback = useKeyFeedback();
-  const commit = (text: string) => {
-    fireKeyFeedback();
-    InputConnection.commitText(text);
-  };
+  // Press highlight + preview bubble, and the key boxes for hit-testing.
+  const {pressKey, releaseKey, onBodyLayout, trackRowLayout, trackKeyLayout, keyAt, renderPreview} = useKeyPreview();
+  const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
   // Whichever of "." / "-" the field actually accepts (never both - a real
   // amount field takes one or the other, not a full expression); left out
@@ -64,12 +69,39 @@ export function NumericPanel() {
     ['7', '8', '9'],
   ];
 
-  const keyStyleFor = (backgroundColor: string, extra?: object) => [
-    styles.key,
-    decor.key,
-    {backgroundColor, paddingVertical: keyPaddingVertical},
-    extra,
-  ];
+  // --- One touch handler for the whole pad ---------------------------
+  // Like the letter keyboard: each finger types its key the instant it
+  // lands, found by hit-testing the measured key boxes. With a touchable
+  // per key, a second finger landing before the first lifted (fast PIN
+  // or OTP entry) could be swallowed by the first key's gesture and lost.
+  // Delete keeps its own native hold-to-repeat view.
+  const activeTouchesRef = useRef(new Set<string>());
+  const containerRef = useRef<View>(null);
+  const handleTouchStart = (event: GestureResponderEvent) => {
+    const container = findNodeHandle(containerRef.current);
+    for (const touch of event.nativeEvent.changedTouches) {
+      // Tap keys pass touches through (pointerEvents none), so a touch on
+      // one targets this panel and locationX/Y are panel coordinates. A
+      // touch on delete targets that view instead (it handles itself).
+      if (Number(touch.target) !== container) continue;
+      const keyId = keyAt(touch.locationX, touch.locationY);
+      if (!keyId || keyId === 'delete') continue;
+      activeTouchesRef.current.add(String(touch.identifier));
+      fireKeyFeedback();
+      if (keyId === 'enter') {
+        pressKey('enter');
+        InputConnection.sendEnter();
+      } else {
+        pressKey(keyId, keyId);
+        InputConnection.commitText(keyId);
+      }
+    }
+  };
+  const handleTouchEnd = (event: GestureResponderEvent) => {
+    for (const touch of event.nativeEvent.changedTouches) {
+      if (activeTouchesRef.current.delete(String(touch.identifier))) releaseKey();
+    }
+  };
 
   const label = (text: string) => (
     <Text
@@ -83,52 +115,72 @@ export function NumericPanel() {
     </Text>
   );
 
-  // Typed on press-in, not release, like the letter keyboard - fast PIN
-  // entry shouldn't wait for each finger to lift.
-  const digitKey = (text: string, flex = 1) => (
-    <TouchableOpacity
-      key={text}
-      activeOpacity={0.6}
-      style={keyStyleFor(theme.keyBackground, {flex})}
-      onPressIn={() => commit(text)}>
-      {label(text)}
-    </TouchableOpacity>
+  // A key's id is what it types (digits, "." / "-"), or "enter".
+  const tapKey = (id: string, row: string, content: React.ReactNode, options: {flex?: number; accent?: boolean} = {}) => (
+    <View
+      key={id}
+      pointerEvents="none"
+      onLayout={trackKeyLayout(id, row, options.accent ? decor.accentRadius : undefined)}
+      style={[
+        styles.key,
+        decor.key,
+        {
+          flex: options.flex ?? 1,
+          backgroundColor: options.accent ? theme.accent : theme.keyBackground,
+          paddingVertical: keyPaddingVertical,
+        },
+        options.accent && {borderRadius: decor.accentRadius},
+      ]}>
+      {content}
+    </View>
   );
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
+    <View
+      ref={containerRef}
+      style={[styles.container, {backgroundColor: theme.panelBackground}]}
+      onLayout={onBodyLayout}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}>
       {digitRows.map((row, rowIndex) => (
-        <View key={rowIndex} style={[styles.row, {marginVertical: rowMarginVertical}]}>
-          {row.map(digit => digitKey(digit))}
+        <View
+          key={rowIndex}
+          pointerEvents="box-none"
+          style={[styles.row, {marginVertical: rowMarginVertical}]}
+          onLayout={trackRowLayout(String(rowIndex))}>
+          {row.map(digit => tapKey(digit, String(rowIndex), label(digit)))}
         </View>
       ))}
       {/* Delete, 0, enter - with "." / "-" ahead of them when the field
           takes one, so delete always sits just before 0 and enter just
           after it. */}
-      <View style={[styles.row, {marginVertical: rowMarginVertical}]}>
-        {cornerKey && digitKey(cornerKey, 0.6)}
+      <View pointerEvents="box-none" style={[styles.row, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('3')}>
+        {cornerKey && tapKey(cornerKey, '3', label(cornerKey), {flex: 0.6})}
         <HoldRepeatKeyView
           mode="repeat"
           longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
           repeatIntervalMs={HOLD_REPEAT_INTERVAL_MS}
+          onPressStart={() => pressKey('delete')}
           onRepeatTick={() => {
             fireKeyFeedback();
             InputConnection.deleteBackward(1);
           }}
-          style={keyStyleFor(theme.keyBackground)}>
+          onPressEnd={releaseKey}
+          onLayout={trackKeyLayout('delete', '3')}
+          style={[styles.key, decor.key, {backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical}]}>
           <Icon name="backspace" size={keyIconSize} color={theme.keyText} />
         </HoldRepeatKeyView>
-        {digitKey('0')}
-        <TouchableOpacity
-          activeOpacity={0.6}
-          style={keyStyleFor(theme.accent, {borderRadius: decor.accentRadius})}
-          onPress={() => {
-            fireKeyFeedback();
-            InputConnection.sendEnter();
-          }}>
-          <Icon name={enterIcon} size={keyIconSize} color="#FFFFFF" />
-        </TouchableOpacity>
+        {tapKey('0', '3', label('0'))}
+        {tapKey('enter', '3', <Icon name={enterIcon} size={keyIconSize} color="#FFFFFF" />, {accent: true})}
       </View>
+      {renderPreview({
+        theme,
+        scale: keyboardSizeScale,
+        fontFamily: keyFontFamily,
+        highlightColor: pressOverlayColor,
+        radius: decor.radius,
+      })}
     </View>
   );
 }

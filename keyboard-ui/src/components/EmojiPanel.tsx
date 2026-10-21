@@ -1,4 +1,4 @@
-import React, {useRef, useState} from 'react';
+import React, {useMemo, useRef, useState} from 'react';
 import {FlatList, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
@@ -36,33 +36,54 @@ function chunk<T>(items: T[], size: number): T[][] {
 // list to have already measured everything up to that point (which
 // SectionList's equivalent scrollToLocation doesn't do reliably for a
 // section far from the current scroll position).
-const FLAT_ROWS: EmojiRow[] = EMOJI_CATEGORIES.flatMap(category =>
-  chunk(category.emojis, EMOJIS_PER_ROW).map(emojis => ({categoryId: category.id, emojis})),
-);
+const RECENT_ID = 'recent';
 
-const CATEGORY_START_INDEX: Record<string, number> = {};
-(() => {
-  let index = 0;
-  for (const category of EMOJI_CATEGORIES) {
-    CATEGORY_START_INDEX[category.id] = index;
-    index += Math.ceil(category.emojis.length / EMOJIS_PER_ROW);
+interface Category {
+  id: string;
+  icon: string;
+  emojis: string[];
+}
+
+// Every row of every category, in order, plus where each category starts.
+function buildRows(categories: Category[]) {
+  const rows: EmojiRow[] = [];
+  const startIndex: Record<string, number> = {};
+  for (const category of categories) {
+    startIndex[category.id] = rows.length;
+    for (const emojis of chunk(category.emojis, EMOJIS_PER_ROW)) rows.push({categoryId: category.id, emojis});
   }
-})();
+  return {rows, startIndex};
+}
 
 export function EmojiPanel() {
   const theme = useKeyboardStore(state => state.theme);
-  const [activeCategoryId, setActiveCategoryId] = useState(EMOJI_CATEGORIES[0].id);
+  const addRecentEmoji = useKeyboardStore(state => state.addRecentEmoji);
+  // Recently used (up to 16, newest first) as the first section. Taken
+  // once when the panel opens, so the row doesn't reshuffle under the
+  // finger while the user is tapping emojis from it.
+  const [recent] = useState(() => useKeyboardStore.getState().recentEmojis);
+  const categories: Category[] = useMemo(
+    () => (recent.length > 0 ? [{id: RECENT_ID, icon: 'history', emojis: recent}, ...EMOJI_CATEGORIES] : EMOJI_CATEGORIES),
+    [recent],
+  );
+  const {rows, startIndex} = useMemo(() => buildRows(categories), [categories]);
+  const [activeCategoryId, setActiveCategoryId] = useState(categories[0].id);
   const listRef = useRef<FlatList<EmojiRow>>(null);
 
   const jumpToCategory = (categoryId: string) => {
     setActiveCategoryId(categoryId);
-    listRef.current?.scrollToIndex({index: CATEGORY_START_INDEX[categoryId], animated: true});
+    listRef.current?.scrollToIndex({index: startIndex[categoryId], animated: true});
+  };
+
+  const sendEmoji = (emoji: string) => {
+    InputConnection.commitText(emoji);
+    addRecentEmoji(emoji);
   };
 
   return (
     <View style={[styles.container, {backgroundColor: theme.panelBackground}]}>
       <View style={styles.categoryTabs}>
-        {EMOJI_CATEGORIES.map(category => (
+        {categories.map(category => (
           <TouchableOpacity
             key={category.id}
             style={[
@@ -82,15 +103,19 @@ export function EmojiPanel() {
       <FlatList
         ref={listRef}
         style={styles.grid}
-        data={FLAT_ROWS}
+        data={rows}
         keyExtractor={(row, index) => `${row.categoryId}-${index}`}
         getItemLayout={(_data, index) => ({length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index})}
         renderItem={({item: row}) => (
           <View style={styles.row}>
             {row.emojis.map(emoji => (
-              <TouchableOpacity key={emoji} style={styles.cell} onPress={() => InputConnection.commitText(emoji)}>
+              <TouchableOpacity key={emoji} style={styles.cell} onPress={() => sendEmoji(emoji)}>
                 <Text style={styles.emoji}>{emoji}</Text>
               </TouchableOpacity>
+            ))}
+            {/* Empty cells so a short last row stays on the grid. */}
+            {Array.from({length: EMOJIS_PER_ROW - row.emojis.length}, (_, i) => (
+              <View key={`pad-${i}`} style={styles.cell} />
             ))}
           </View>
         )}

@@ -109,8 +109,17 @@ export default function App() {
   // the next letter is then capitalised - and there's no word in progress.
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('onCursorAtStart', () => {
-      setShiftActive(true);
-      resetTypingSession();
+      // Replacing the first word in the box (auto-correct, a suggestion
+      // chip) deletes it before typing the new one, so the field is empty
+      // for a moment - which used to reset the session, losing the undo
+      // and capitalising the next word. Only act if it's still empty.
+      InputConnection.getCursorPosition()
+        .then(pos => {
+          if (pos !== 0) return;
+          setShiftActive(true);
+          resetTypingSession();
+        })
+        .catch(() => {});
     });
     return () => subscription.remove();
   }, [setShiftActive, resetTypingSession]);
@@ -164,6 +173,7 @@ export default function App() {
     InputConnection.commitText(applied + ' ');
     setLastSuggestion({original: typedWord, applied});
     updateTypedWord('');
+    useKeyboardStore.getState().addRecentEmoji(emoji);
   };
 
   // The outer root View is forced to a fixed native height (see
@@ -266,10 +276,22 @@ export default function App() {
   return (
     <View style={[styles.root, {backgroundColor: theme.backgroundBase ?? theme.panelBackground}]}>
       {/* A photo theme's picture behind everything (themes/imageTheme.ts),
-          with a light or dark wash so keys and text stay readable. */}
+          with a light or dark wash so keys and text stay readable. The
+          whole photo is shown, scaled to fit whatever height and width
+          the current panel has; a blurred, zoomed copy of it fills the
+          space either side, so there are no empty bars and nothing is
+          cropped or stretched. */}
       {theme.backgroundImage && (
         <>
-          <Image source={{uri: theme.backgroundImage}} style={StyleSheet.absoluteFill} resizeMode="cover" fadeDuration={0} />
+          <Image
+            source={{uri: theme.backgroundImage}}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            resizeMethod="resize"
+            blurRadius={18}
+            fadeDuration={0}
+          />
+          <Image source={{uri: theme.backgroundImage}} style={StyleSheet.absoluteFill} resizeMode="contain" fadeDuration={0} />
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, {backgroundColor: theme.backgroundScrim}]} />
         </>
       )}

@@ -111,6 +111,8 @@ export function SettingsPanel() {
     setSwipeTypingTrailEnabled,
     swipeTypingEnabled,
     setSwipeTypingEnabled,
+    autoCorrectEnabled,
+    setAutoCorrectEnabled,
     keyboardSizeScale,
     setKeyboardSizeScale,
     oneHandedMode,
@@ -161,6 +163,14 @@ export function SettingsPanel() {
           label="Key sound"
           value={keySoundEnabled}
           onChange={setKeySoundEnabled}
+          textColor={theme.keyText}
+          accent={theme.accent}
+        />
+        <ToggleRow
+          label="Auto-correct"
+          value={autoCorrectEnabled}
+          onChange={setAutoCorrectEnabled}
+          note="Fixes obvious typos when you press space. Press backspace straight after to undo."
           textColor={theme.keyText}
           accent={theme.accent}
         />

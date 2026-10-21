@@ -76,6 +76,9 @@ const NUMBER_ROW_ENABLED_KEY = 'number_row_enabled';
 const HINGLISH_ENABLED_KEY = 'hinglish_enabled';
 const KEY_STYLE_KEY = 'key_style';
 const SWIPE_TYPING_ENABLED_KEY = 'swipe_typing_enabled';
+const AUTO_CORRECT_ENABLED_KEY = 'auto_correct_enabled';
+const RECENT_EMOJIS_KEY = 'recent_emojis';
+const MAX_RECENT_EMOJIS = 16;
 const HAPTIC_FEEDBACK_ENABLED_KEY = 'haptic_feedback_enabled';
 const KEY_SOUND_ENABLED_KEY = 'key_sound_enabled';
 // Persisted and shown as a real toggle (see SettingsPanel), but there is no
@@ -165,6 +168,15 @@ interface KeyboardState {
   // services/swipeDecoder.ts). The trail drawn under the finger is a
   // separate switch, swipeTypingTrailEnabled.
   swipeTypingEnabled: boolean;
+  // Space fixes an obvious typo in the word just typed (one edit from a
+  // common word, and nothing real starts with it) - backspace right after
+  // puts the original back. See autoCorrection.
+  autoCorrectEnabled: boolean;
+  // The fix space would apply to the word being typed, if any - the same
+  // correction the strip offers as a chip (see updateTypedWord).
+  autoCorrection: string | null;
+  // Most recent first, at most MAX_RECENT_EMOJIS.
+  recentEmojis: string[];
   // Real: a short Vibration.vibrate() on every key press when on.
   hapticFeedbackEnabled: boolean;
   // Real: plays Android's built-in keypress click sound (see
@@ -226,6 +238,8 @@ interface KeyboardState {
   setHinglishEnabled: (value: boolean) => void;
   setKeyStyle: (patch: Partial<KeyStyle>) => void;
   setSwipeTypingEnabled: (value: boolean) => void;
+  setAutoCorrectEnabled: (value: boolean) => void;
+  addRecentEmoji: (emoji: string) => void;
   // After a swipe: `word` was typed (without a trailing space), and the
   // strip offers `alternatives` - tapping one replaces it like any other
   // suggestion.
@@ -268,6 +282,9 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   hinglishEnabled: true,
   keyStyle: DEFAULT_KEY_STYLE,
   swipeTypingEnabled: true,
+  autoCorrectEnabled: true,
+  autoCorrection: null,
+  recentEmojis: [],
   hapticFeedbackEnabled: true,
   keySoundEnabled: false,
   swipeTypingTrailEnabled: true,
@@ -319,6 +336,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     set({
       typedWord: '',
       suggestions: [],
+      autoCorrection: null,
       emojiSuggestion: null,
       lastSuggestion: null,
       isToolbarExpanded: false,
@@ -349,6 +367,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     // ahead of the fixed dictionary; de-dupe in case a learned word also
     // happens to be in the static list.
     let suggestions = [...new Set([...learnedMatches, ...staticMatches])].slice(0, 3);
+    let autoCorrection: string | null = null;
     // Once what's typed so far no longer prefix-matches anything real (or
     // learned), it's stopped looking like a word-in-progress and started
     // looking like a typo - offer the closest one-edit-away real word as
@@ -367,11 +386,17 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
         suggestions = [
           firstChar !== firstChar.toLowerCase() ? correction.charAt(0).toUpperCase() + correction.slice(1) : correction,
         ];
+        // Auto-correct applies the same fix on space - but not to an
+        // all-caps word (likely an acronym) or one the user has typed
+        // before and taught the keyboard.
+        const isLearned = learnedWords.some(w => w.toLowerCase() === word.toLowerCase());
+        if (word !== word.toUpperCase() && !isLearned) autoCorrection = suggestions[0];
       }
     }
     set({
       typedWord: word,
       suggestions,
+      autoCorrection,
       emojiSuggestion: getEmojiSuggestion(word),
       // Each new word starts collapsed (suggestions shown, icons hidden)
       // again even if the user expanded the icon row for the last word -
@@ -499,10 +524,22 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(SWIPE_TYPING_ENABLED_KEY, value);
   },
 
+  setAutoCorrectEnabled: value => {
+    set({autoCorrectEnabled: value});
+    ThemeStorage.saveJSON(AUTO_CORRECT_ENABLED_KEY, value);
+  },
+
+  addRecentEmoji: emoji => {
+    const updated = [emoji, ...get().recentEmojis.filter(e => e !== emoji)].slice(0, MAX_RECENT_EMOJIS);
+    set({recentEmojis: updated});
+    ThemeStorage.saveJSON(RECENT_EMOJIS_KEY, updated);
+  },
+
   setSwipeResult: (word, alternatives) =>
     set({
       typedWord: word,
       suggestions: alternatives.filter(alt => alt !== word).slice(0, 3),
+      autoCorrection: null,
       emojiSuggestion: getEmojiSuggestion(word),
       isToolbarExpanded: false,
     }),
@@ -569,6 +606,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       hinglishEnabled,
       keyStyle,
       swipeTypingEnabled,
+      autoCorrectEnabled,
+      recentEmojis,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -592,6 +631,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<boolean>(HINGLISH_ENABLED_KEY, true),
       ThemeStorage.loadJSON<KeyStyle>(KEY_STYLE_KEY, DEFAULT_KEY_STYLE),
       ThemeStorage.loadJSON<boolean>(SWIPE_TYPING_ENABLED_KEY, true),
+      ThemeStorage.loadJSON<boolean>(AUTO_CORRECT_ENABLED_KEY, true),
+      ThemeStorage.loadJSON<string[]>(RECENT_EMOJIS_KEY, []),
     ]);
     set({
       // English switched from US to UK spelling (en-US -> en-GB); a saved
@@ -623,6 +664,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       // fields) still gets every option.
       keyStyle: {...DEFAULT_KEY_STYLE, ...keyStyle},
       swipeTypingEnabled,
+      autoCorrectEnabled,
+      recentEmojis,
     });
   },
 }));

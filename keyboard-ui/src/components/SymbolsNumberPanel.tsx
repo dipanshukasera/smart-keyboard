@@ -1,9 +1,9 @@
-import React, {useState} from 'react';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {DeviceEventEmitter, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
-import {PILL_BACKGROUND, PILL_TEXT} from './KeyboardLayout';
+import {ENTER_ICON_BY_ACTION, PILL_BACKGROUND, PILL_TEXT} from './KeyboardLayout';
 import {HoldRepeatKeyView} from './HoldRepeatKeyView';
 import {useKeyPreview} from '../hooks/useKeyPreview';
 import {useKeyFeedback} from '../hooks/useKeyFeedback';
@@ -41,10 +41,22 @@ const PAGE_TWO = {
 };
 
 export function SymbolsNumberPanel() {
-  const {theme, setActivePanel, keyboardSizeScale, keyStyle} = useKeyboardStore();
+  const {theme, setActivePanel, keyboardSizeScale, keyStyle, keyFontFamily} = useKeyboardStore();
   // Same key shape/outline/3D/bold as the letter keyboard.
   const decor = keyDecor(keyStyle, theme);
   const [page, setPage] = useState<'one' | 'two'>('one');
+  // Send/search/next/newline to match the field, as on the letter keyboard.
+  const [enterIcon, setEnterIcon] = useState('keyboard-return');
+  useEffect(() => {
+    const refresh = () => {
+      InputConnection.getImeAction()
+        .then(action => setEnterIcon(ENTER_ICON_BY_ACTION[action]))
+        .catch(() => {});
+    };
+    refresh();
+    const subscription = DeviceEventEmitter.addListener('onInputFieldChanged', refresh);
+    return () => subscription.remove();
+  }, []);
   const active = page === 'one' ? PAGE_ONE : PAGE_TWO;
 
   // Same base values (and the same keyboardSizeScale factor) as
@@ -94,7 +106,9 @@ export function SymbolsNumberPanel() {
         commit(symbol);
       }}
       onPressOut={releaseKey}>
-      <Text style={{color: theme.keyText, fontSize: keyFontSize, fontWeight: decor.labelWeight}}>{symbol}</Text>
+      <Text style={{color: theme.keyText, fontSize: keyFontSize, fontWeight: decor.labelWeight, fontFamily: keyFontFamily ?? undefined}}>
+        {symbol}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -105,7 +119,11 @@ export function SymbolsNumberPanel() {
           key={rowIndex}
           style={[styles.row, {marginVertical: rowMarginVertical}]}
           onLayout={trackRowLayout(String(rowIndex))}>
+          {/* The second row is inset half a key on each side, like the
+              letter keyboard's (a-l under q-p). */}
+          {rowIndex === 1 && <View style={styles.rowInset} />}
           {row.map((symbol, keyIndex) => symbolKey(`${rowIndex}-${keyIndex}`, String(rowIndex), symbol))}
+          {rowIndex === 1 && <View style={styles.rowInset} />}
         </View>
       ))}
 
@@ -206,7 +224,7 @@ export function SymbolsNumberPanel() {
           onPressOut={releaseKey}
           onLayout={trackKeyLayout('enter', '3', decor.accentRadius)}
           onPress={() => InputConnection.sendEnter()}>
-          <Icon name="keyboard-return" size={keyIconSize} color="#FFFFFF" />
+          <Icon name={enterIcon} size={keyIconSize} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -216,6 +234,9 @@ export function SymbolsNumberPanel() {
 }
 
 const styles = StyleSheet.create({
+  rowInset: {
+    flex: 0.5,
+  },
   container: {
     paddingVertical: 4,
   },
