@@ -581,7 +581,7 @@ footer .links { margin-left: auto; display: flex; gap: 22px; }
   } else { rv.forEach(function (el) { el.classList.add('in'); }); }
 
   /* ---------- request form ---------- */
-  var ENDPOINT = ''; // paste the Google Apps Script web app URL here: requests go to the Google Sheet
+  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbzJt5m4FngWeQ3JuxdB_ksQ3QkMHu7P-uvRlH2ldrNKXZuZY7NS_qzVUruHEiy46WgprA/exec'; // paste the Google Apps Script web app URL here: requests go to the Google Sheet
   var REPO = 'dipanshukasera/smart-keyboard';
   var form = document.getElementById('reqform'), status = document.getElementById('status'), btn = document.getElementById('send'), note = document.getElementById('note');
   if (ENDPOINT) { note.hidden = true; } else { btn.disabled = true; btn.textContent = 'Opening soon'; note.textContent = 'The request form is being connected. Please check back soon.'; }
