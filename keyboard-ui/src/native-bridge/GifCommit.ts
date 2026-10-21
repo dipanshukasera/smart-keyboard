@@ -6,7 +6,6 @@ interface GifCommitNative {
   focusedPackage(): Promise<string | null>;
   sendVideo(videoUrl: string): Promise<VideoSendResult>;
   acceptsAnimatedGif(): Promise<boolean>;
-  videoRoute(): Promise<VideoRoute>;
   copyGifToClipboard(url: string): Promise<boolean>;
   commitGif(remoteUrl: string): Promise<boolean>;
   cacheGif(remoteUrl: string): Promise<string>;
@@ -15,8 +14,6 @@ interface GifCommitNative {
 // committed: typed into the message box; shared: the app's own share
 // screen opened with it; none: the app takes video neither way.
 export type VideoSendResult = 'committed' | 'shared' | 'none';
-// See GifCommitModule.videoRoute.
-export type VideoRoute = 'box' | 'gif' | 'share';
 
 const native = NativeModules.GifCommitModule as GifCommitNative | undefined;
 
@@ -60,16 +57,6 @@ export const GifCommit = {
       return await native.copyGifToClipboard(url);
     } catch {
       return false;
-    }
-  },
-
-  // How a video send would reach the focused app (see VideoRoute).
-  async videoRoute(): Promise<VideoRoute> {
-    if (!native) return 'share';
-    try {
-      return await native.videoRoute();
-    } catch {
-      return 'share';
     }
   },
 

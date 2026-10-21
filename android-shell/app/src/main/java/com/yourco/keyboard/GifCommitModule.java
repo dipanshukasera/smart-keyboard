@@ -67,8 +67,9 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
     }
 
     // Sends a GIF's mp4 as a video to whichever app is being typed into:
-    //  - "committed": straight into the message box, when the field says it
-    //    takes video (commitContent, like a GIF);
+    //  - "committed": straight into the open chat's message box, if the app
+    //    takes the video there (commitContent, like a GIF - offered even
+    //    when the field doesn't list video, see below);
     //  - "shared": otherwise through that app's own share screen (ACTION_SEND
     //    video/mp4, limited to the focused app) - the user picks the chat and
     //    taps send there. Instagram plays nothing a keyboard puts in its box,
@@ -93,11 +94,25 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                         getReactApplicationContext().getPackageName() + ".fileprovider",
                         video);
 
-                if (ic != null && !INSTAGRAM.equals(pkg) && accepts(info, "video/mp4")) {
-                    InputContentInfoCompat contentInfo = new InputContentInfoCompat(
-                            uri, new ClipDescription("Video", new String[]{"video/mp4", "video/*"}), null);
-                    if (InputConnectionCompat.commitContent(
-                            ic, info, contentInfo, InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)) {
+                if (ic != null && !INSTAGRAM.equals(pkg)) {
+                    // Offered to the message box even when the field doesn't
+                    // list video among the types it takes (WhatsApp lists
+                    // only images/GIFs): the app can still accept it, and if
+                    // it does the video lands in the open chat. Called on the
+                    // InputConnection directly - the androidx helper drops it
+                    // before asking whenever the type isn't listed.
+                    ClipDescription description = new ClipDescription("Video", new String[]{"video/mp4", "video/*"});
+                    boolean committed;
+                    if (accepts(info, "video/mp4")) {
+                        committed = InputConnectionCompat.commitContent(
+                                ic, info, new InputContentInfoCompat(uri, description, null),
+                                InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
+                    } else {
+                        committed = ic.commitContent(
+                                new android.view.inputmethod.InputContentInfo(uri, description, null),
+                                InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null);
+                    }
+                    if (committed) {
                         promise.resolve("committed");
                         return;
                     }
@@ -161,28 +176,6 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
                 promise.resolve(false);
             }
         }).start();
-    }
-
-    // How a GIF's video can reach the app being typed into without making
-    // the user pick the chat again:
-    //  - "box":   its message box takes video - sendVideo commits it there;
-    //  - "gif":   it doesn't take video but does take GIFs (WhatsApp,
-    //             Telegram...) - send the GIF into the box instead; those
-    //             apps turn it into their own looping video anyway;
-    //  - "share": neither (Instagram, or no media support at all) - only
-    //             the app's share screen can deliver it.
-    @ReactMethod
-    public void videoRoute(Promise promise) {
-        EditorInfo info = InputConnectionHolder.editorInfo();
-        if (info == null) {
-            promise.resolve("share");
-        } else if (!INSTAGRAM.equals(info.packageName) && accepts(info, "video/mp4")) {
-            promise.resolve("box");
-        } else if (accepts(info, "image/gif") && !GIF_REFUSING_APPS.contains(info.packageName)) {
-            promise.resolve("gif");
-        } else {
-            promise.resolve("share");
-        }
     }
 
     // Whether the focused field takes an animated GIF from a keyboard - false
