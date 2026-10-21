@@ -24,8 +24,12 @@ android {
         applicationId "com.yourco.keyboard"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        // Bump both for every GitHub release: versionName is what Android
+        // shows (match the release tag, e.g. v1.0.5 -> "1.0.5"), and
+        // versionCode must go up or a phone won't install it over the
+        // previous one. versionCode = major*10000 + minor*100 + patch.
+        versionCode 10005
+        versionName "1.0.5"
     }
 
     signingConfigs {
