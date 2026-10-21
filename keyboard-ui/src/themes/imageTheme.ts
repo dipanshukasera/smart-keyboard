@@ -54,3 +54,57 @@ export function themeFromImage(picked: PickedBackground): KeyboardTheme {
     backgroundBase: base,
   };
 }
+
+// --- Framing a photo behind the keyboard ---------------------------------
+// The photo is positioned inside a width x height area (the keyboard, or the
+// preview of it) from three numbers the user sets: zoom, and a move from
+// centred as a fraction of the area's width/height.
+
+export const MAX_BACKGROUND_ZOOM = 4;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+// Where the photo sits, in the area's own coordinates. Zoom 1 is "fill": the
+// photo just covers the area (cropping whichever dimension is longer).
+export function backgroundFrame(
+  width: number,
+  height: number,
+  aspect: number,
+  zoom: number,
+  offsetX: number,
+  offsetY: number,
+) {
+  const coverWidth = Math.max(width, height * aspect);
+  const frameWidth = coverWidth * zoom;
+  const frameHeight = frameWidth / aspect;
+  return {
+    width: frameWidth,
+    height: frameHeight,
+    left: (width - frameWidth) / 2 + offsetX * width,
+    top: (height - frameHeight) / 2 + offsetY * height,
+  };
+}
+
+// The smallest zoom that still shows the whole photo ("fit").
+export function fitZoom(width: number, height: number, aspect: number): number {
+  return Math.min(width, height * aspect) / Math.max(width, height * aspect);
+}
+
+// Keeps a framing in bounds: not zoomed out past "fit" or in past
+// MAX_BACKGROUND_ZOOM, and not moved far enough to show a bare edge where
+// the photo is bigger than the area (where it's smaller it stays centred, the
+// blurred copy fills round it).
+export function clampFraming(
+  width: number,
+  height: number,
+  aspect: number,
+  zoom: number,
+  offsetX: number,
+  offsetY: number,
+) {
+  const clampedZoom = clamp(zoom, fitZoom(width, height, aspect), MAX_BACKGROUND_ZOOM);
+  const frame = backgroundFrame(width, height, aspect, clampedZoom, 0, 0);
+  const maxX = Math.max(0, (frame.width - width) / 2) / width;
+  const maxY = Math.max(0, (frame.height - height) / 2) / height;
+  return {zoom: clampedZoom, offsetX: clamp(offsetX, -maxX, maxX), offsetY: clamp(offsetY, -maxY, maxY)};
+}

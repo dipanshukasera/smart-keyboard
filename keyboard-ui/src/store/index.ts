@@ -222,6 +222,15 @@ interface KeyboardState {
   setActivePanel: (panel: PanelType) => void;
   setTheme: (theme: KeyboardTheme) => void;
   addCustomTheme: (theme: KeyboardTheme) => void;
+  // A photo theme waiting to be framed (BackgroundAdjust): just picked
+  // (isNew: nothing is saved until Apply) or an existing one being
+  // re-framed. Held here, not in the Themes panel: the photo picker takes
+  // over the screen, and the keyboard resets to its letters when it comes
+  // back - which used to throw away a panel's own state.
+  pendingPhoto: {theme: KeyboardTheme; isNew: boolean} | null;
+  setPendingPhoto: (pending: {theme: KeyboardTheme; isNew: boolean} | null) => void;
+  // Replaces the custom theme with the same id (re-framing a photo theme).
+  updateCustomTheme: (theme: KeyboardTheme) => void;
   deleteCustomTheme: (id: string) => void;
   setKeyboardSizeScale: (scale: number) => void;
   toggleShift: () => void;
@@ -333,6 +342,17 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     set({customThemes: updated, theme});
     ThemeStorage.saveJSON(CUSTOM_THEMES_KEY, updated);
     ThemeStorage.saveTheme(theme);
+  },
+
+  pendingPhoto: null,
+  setPendingPhoto: pending => set({pendingPhoto: pending}),
+
+  updateCustomTheme: theme => {
+    const updated = get().customThemes.map(t => (t.id === theme.id ? theme : t));
+    const isActive = get().theme.id === theme.id;
+    set({customThemes: updated, ...(isActive ? {theme} : {})});
+    ThemeStorage.saveJSON(CUSTOM_THEMES_KEY, updated);
+    if (isActive) ThemeStorage.saveTheme(theme);
   },
 
   deleteCustomTheme: id => {

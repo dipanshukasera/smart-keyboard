@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   DeviceEventEmitter,
   Image,
@@ -32,6 +32,9 @@ import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
 import {useHindiSuggestion} from './hooks/useHindiSuggestion';
 import {prefetchFeed} from './services/gifFeedCache';
+import {backgroundFrame} from './themes/imageTheme';
+import {BackgroundAdjust} from './components/BackgroundAdjust';
+import {BackgroundImage} from './native-bridge/BackgroundImage';
 
 const {ClipboardModule, KeyboardSizeModule} = NativeModules;
 
@@ -58,6 +61,8 @@ export default function App() {
     cycleKeyboardDim,
   } = useKeyboardStore();
   const lastReportedHeight = useRef(0);
+  const [rootSize, setRootSize] = useState({width: 0, height: 0});
+  const pendingPhoto = useKeyboardStore(state => state.pendingPhoto);
   // Called unconditionally (Rules of Hooks) - its internal effects
   // self-gate on activePanel === 'translate', so this is a no-op the rest
   // of the time. Holding it here (instead of inside a panel component)
@@ -213,6 +218,31 @@ export default function App() {
   };
 
   const renderPanel = () => {
+    // A photo being framed takes over the keyboard until Apply or Cancel,
+    // whichever panel the keyboard reset to after the photo picker.
+    if (pendingPhoto) {
+      const {addCustomTheme, updateCustomTheme, setPendingPhoto} = useKeyboardStore.getState();
+      return (
+        <BackgroundAdjust
+          theme={pendingPhoto.theme}
+          onApply={framed => {
+            if (pendingPhoto.isNew) addCustomTheme(framed);
+            else updateCustomTheme(framed);
+            setPendingPhoto(null);
+            setActivePanel('themeCustomizer');
+          }}
+          onCancel={() => {
+            // A photo that was just picked and isn't going to be used: its
+            // saved copy goes too.
+            if (pendingPhoto.isNew && pendingPhoto.theme.backgroundImage) {
+              BackgroundImage.remove(pendingPhoto.theme.backgroundImage);
+            }
+            setPendingPhoto(null);
+            setActivePanel('themeCustomizer');
+          }}
+        />
+      );
+    }
     switch (activePanel) {
       case 'emoji':
         return <EmojiPanel />;
@@ -295,10 +325,27 @@ export default function App() {
   // learned words, settings and the other sheets). A numeric field's
   // number pad gets no toolbar either - it's single-purpose, and Gboard
   // shows no icon row there.
-  const showsToolbarRow = activePanel === 'keyboard' || activePanel === 'symbols';
+  const showsToolbarRow = !pendingPhoto && (activePanel === 'keyboard' || activePanel === 'symbols');
+
+  // Where a framed photo theme's picture sits behind the keyboard, worked out
+  // from the keyboard's current size (null until it has one, or for a theme
+  // that was never framed).
+  const photoFrame =
+    theme.backgroundZoom != null && theme.backgroundAspect && rootSize.width > 0 && rootSize.height > 0
+      ? backgroundFrame(
+          rootSize.width,
+          rootSize.height,
+          theme.backgroundAspect,
+          theme.backgroundZoom,
+          theme.backgroundOffsetX ?? 0,
+          theme.backgroundOffsetY ?? 0,
+        )
+      : null;
 
   return (
-    <View style={[styles.root, {backgroundColor: theme.backgroundBase ?? theme.panelBackground}]}>
+    <View
+      style={[styles.root, {backgroundColor: theme.backgroundBase ?? theme.panelBackground}]}
+      onLayout={event => setRootSize(event.nativeEvent.layout)}>
       {/* A photo theme's picture behind everything (themes/imageTheme.ts),
           with a light or dark wash so keys and text stay readable. The
           whole photo is shown, scaled to fit whatever height and width
@@ -315,7 +362,16 @@ export default function App() {
             blurRadius={18}
             fadeDuration={0}
           />
-          <Image source={{uri: theme.backgroundImage}} style={StyleSheet.absoluteFill} resizeMode="contain" fadeDuration={0} />
+          {photoFrame ? (
+            <Image
+              source={{uri: theme.backgroundImage}}
+              style={{position: 'absolute', ...photoFrame}}
+              fadeDuration={0}
+            />
+          ) : (
+            // Photo themes made before framing existed: the whole photo, fitted.
+            <Image source={{uri: theme.backgroundImage}} style={StyleSheet.absoluteFill} resizeMode="contain" fadeDuration={0} />
+          )}
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, {backgroundColor: theme.backgroundScrim}]} />
         </>
       )}

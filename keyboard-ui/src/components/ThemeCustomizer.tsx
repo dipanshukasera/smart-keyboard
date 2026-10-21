@@ -19,8 +19,16 @@ const SHAPES: {value: KeyShape; label: string}[] = [
 // chosen. Every other preference (layout, size, one-handed, privacy,
 // content) is in SettingsPanel.
 export function ThemeCustomizer() {
-  const {theme, setTheme, customThemes, deleteCustomTheme, addCustomTheme, setActivePanel, keyStyle, setKeyStyle} =
-    useKeyboardStore();
+  const {
+    theme,
+    setTheme,
+    customThemes,
+    deleteCustomTheme,
+    setPendingPhoto,
+    setActivePanel,
+    keyStyle,
+    setKeyStyle,
+  } = useKeyboardStore();
   const decor = keyDecor(keyStyle, theme);
   const [showCreator, setShowCreator] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -34,7 +42,8 @@ export function ThemeCustomizer() {
     setPicking(true);
     try {
       const picked = await BackgroundImage.pick();
-      if (picked) addCustomTheme(themeFromImage(picked));
+      // Framing happens on its own screen (BackgroundAdjust, shown by App).
+      if (picked) setPendingPhoto({theme: themeFromImage(picked), isNew: true});
     } catch (e) {
       setPickError(e instanceof Error ? e.message : "Couldn't use that image");
     } finally {
@@ -114,6 +123,16 @@ export function ThemeCustomizer() {
           </TouchableOpacity>
         </ScrollView>
         {pickError && <Text style={[styles.hint, {color: theme.accent}]}>{pickError}</Text>}
+        {/* Move/zoom the photo behind the keys, with a preview, for the photo
+            theme that's on now. */}
+        {theme.backgroundImage && customThemes.some(custom => custom.id === theme.id) && (
+          <TouchableOpacity
+            style={[styles.adjustButton, {backgroundColor: theme.keyBackground.slice(0, 7)}]}
+            onPress={() => setPendingPhoto({theme, isNew: false})}>
+            <Icon name="crop" size={16} color={theme.keyText} />
+            <Text style={{color: theme.keyText, fontSize: 12, marginLeft: 6}}>Adjust photo</Text>
+          </TouchableOpacity>
+        )}
         {customThemes.length > 0 && (
           <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Long-press a custom theme to delete it</Text>
         )}
@@ -246,6 +265,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 8,
     marginBottom: 6,
+  },
+  adjustButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    marginTop: 8,
   },
   hint: {
     fontSize: 11,

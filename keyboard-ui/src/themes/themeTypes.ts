@@ -13,4 +13,13 @@ export interface KeyboardTheme {
   backgroundImage?: string;
   backgroundScrim?: string;
   backgroundBase?: string;
+  // How the user framed the photo (BackgroundAdjust): zoom as a multiple of
+  // "fill" (1 = covers the keyboard exactly, smaller shows the whole photo),
+  // and the move from centred as a fraction of the keyboard's width/height.
+  // backgroundAspect is the photo's width / height. Absent on photo themes
+  // made before framing existed - those keep the whole photo, fitted.
+  backgroundZoom?: number;
+  backgroundOffsetX?: number;
+  backgroundOffsetY?: number;
+  backgroundAspect?: number;
 }
