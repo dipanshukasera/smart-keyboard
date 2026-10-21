@@ -5,6 +5,7 @@ import {ThemeStorage} from '../native-bridge/ThemeStorage';
 import {BackgroundImage} from '../native-bridge/BackgroundImage';
 import {getSuggestions, getSpellingCorrection} from '../services/dictionary';
 import {getEmojiSuggestion} from '../data/emojiKeywords';
+import {WordPairs, endsSentence, normalizeWord, predictNextWords, recordPair} from '../services/nextWords';
 import {DEFAULT_KEY_STYLE, KeyStyle} from '../themes/keyStyle';
 
 export type PanelType =
@@ -84,6 +85,7 @@ const KEY_STYLE_KEY = 'key_style';
 const SWIPE_TYPING_ENABLED_KEY = 'swipe_typing_enabled';
 const AUTO_CORRECT_ENABLED_KEY = 'auto_correct_enabled';
 const RECENT_EMOJIS_KEY = 'recent_emojis';
+const WORD_PAIRS_KEY = 'word_pairs';
 const MAX_RECENT_EMOJIS = 16;
 const HAPTIC_FEEDBACK_ENABLED_KEY = 'haptic_feedback_enabled';
 const KEY_SOUND_ENABLED_KEY = 'key_sound_enabled';
@@ -183,6 +185,13 @@ interface KeyboardState {
   autoCorrection: string | null;
   // Most recent first, at most MAX_RECENT_EMOJIS.
   recentEmojis: string[];
+  // Next-word prediction (services/nextWords.ts): which word follows which
+  // in what the user types, the last finished word of this sentence (lower
+  // case; null at a sentence start or in a fresh field), and the one
+  // before it, so undoing a correction can put it back.
+  wordPairs: WordPairs;
+  previousWord: string | null;
+  priorWord: string | null;
   // Real: a short Vibration.vibrate() on every key press when on.
   hapticFeedbackEnabled: boolean;
   // Real: plays Android's built-in keypress click sound (see
@@ -246,6 +255,12 @@ interface KeyboardState {
   setSwipeTypingEnabled: (value: boolean) => void;
   setAutoCorrectEnabled: (value: boolean) => void;
   addRecentEmoji: (emoji: string) => void;
+  // A word was finished (space, a tapped suggestion, enter): learn that it
+  // followed the word before it, and offer the words that usually come
+  // next. `sentenceEnd` starts the next sentence with nothing carried over.
+  completeWord: (word: string, sentenceEnd?: boolean) => void;
+  // After undoing a correction: the word before is the previous one again.
+  restorePreviousWord: () => void;
   // After a swipe: `word` was typed (without a trailing space), and the
   // strip offers `alternatives` - tapping one replaces it like any other
   // suggestion.
@@ -291,6 +306,9 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   autoCorrectEnabled: true,
   autoCorrection: null,
   recentEmojis: [],
+  wordPairs: {},
+  previousWord: null,
+  priorWord: null,
   hapticFeedbackEnabled: true,
   keySoundEnabled: false,
   swipeTypingTrailEnabled: true,
@@ -340,6 +358,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
 
   resetTypingSession: () =>
     set({
+      previousWord: null,
+      priorWord: null,
       typedWord: '',
       suggestions: [],
       autoCorrection: null,
@@ -363,6 +383,18 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
 
   updateTypedWord: word => {
     const {activeLocale, learnedWords} = get();
+    // Nothing typed yet (just finished a word, or deleted back to the
+    // space): offer the words that usually follow the last one.
+    if (!word) {
+      set({
+        typedWord: '',
+        suggestions: predictNextWords(get().wordPairs, get().previousWord),
+        autoCorrection: null,
+        emojiSuggestion: null,
+        isToolbarExpanded: false,
+      });
+      return;
+    }
     const staticMatches = word ? getSuggestions(activeLocale, word) : [];
     const learnedMatches = word
       ? learnedWords.filter(
@@ -535,6 +567,29 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(AUTO_CORRECT_ENABLED_KEY, value);
   },
 
+  completeWord: (word, sentenceEnd = false) => {
+    const state = get();
+    const normalized = normalizeWord(word);
+    // Learned like the word list: never in password fields or incognito,
+    // and only if "learn from typing" is on.
+    const mayLearn = !state.isIncognito && !state.isSensitiveField && state.learnFromTyping;
+    let wordPairs = state.wordPairs;
+    if (normalized && state.previousWord && mayLearn) {
+      wordPairs = recordPair(wordPairs, state.previousWord, normalized);
+      saveWordPairsSoon(wordPairs);
+    }
+    set({
+      wordPairs,
+      priorWord: state.previousWord,
+      previousWord: normalized && !sentenceEnd && !endsSentence(word) ? normalized : null,
+    });
+    get().updateTypedWord('');
+  },
+
+  restorePreviousWord: () => {
+    set({previousWord: get().priorWord});
+  },
+
   addRecentEmoji: emoji => {
     const updated = [emoji, ...get().recentEmojis.filter(e => e !== emoji)].slice(0, MAX_RECENT_EMOJIS);
     set({recentEmojis: updated});
@@ -614,6 +669,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       swipeTypingEnabled,
       autoCorrectEnabled,
       recentEmojis,
+      wordPairs,
     ] = await Promise.all([
       ThemeStorage.loadActiveLocale(),
       ThemeStorage.loadTheme(),
@@ -639,6 +695,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       ThemeStorage.loadJSON<boolean>(SWIPE_TYPING_ENABLED_KEY, true),
       ThemeStorage.loadJSON<boolean>(AUTO_CORRECT_ENABLED_KEY, true),
       ThemeStorage.loadJSON<string[]>(RECENT_EMOJIS_KEY, []),
+      ThemeStorage.loadJSON<WordPairs>(WORD_PAIRS_KEY, {}),
     ]);
     set({
       // English switched from US to UK spelling (en-US -> en-GB); a saved
@@ -672,9 +729,21 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       swipeTypingEnabled,
       autoCorrectEnabled,
       recentEmojis,
+      wordPairs: wordPairs && typeof wordPairs === 'object' ? wordPairs : {},
     });
   },
 }));
+
+// Saving the whole pair table on every space would be a lot of writes while
+// typing fast - wait for a pause.
+let saveWordPairsTimer: ReturnType<typeof setTimeout> | null = null;
+function saveWordPairsSoon(pairs: WordPairs) {
+  if (saveWordPairsTimer) clearTimeout(saveWordPairsTimer);
+  saveWordPairsTimer = setTimeout(() => {
+    saveWordPairsTimer = null;
+    ThemeStorage.saveJSON(WORD_PAIRS_KEY, pairs);
+  }, 2000);
+}
 
 // Guards against a corrupt/outdated persisted order (unknown ids, a tool
 // added since this was saved, duplicates) ever reaching the toolbar -

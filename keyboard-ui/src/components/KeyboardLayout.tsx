@@ -152,6 +152,7 @@ function KeyboardLayoutImpl({
     setShiftActive,
     setActivePanel,
     updateTypedWord,
+    completeWord,
     learnWord,
     oneHandedMode,
     setOneHandedMode,
@@ -173,6 +174,7 @@ function KeyboardLayoutImpl({
       setShiftActive: state.setShiftActive,
       setActivePanel: state.setActivePanel,
       updateTypedWord: state.updateTypedWord,
+      completeWord: state.completeWord,
       learnWord: state.learnWord,
       oneHandedMode: state.oneHandedMode,
       setOneHandedMode: state.setOneHandedMode,
@@ -310,6 +312,14 @@ function KeyboardLayoutImpl({
     }
   };
 
+  // A word was finished (space, enter, a correction): learns it and shows
+  // the words that usually come next - see the store's completeWord.
+  const finishWord = (word: string, sentenceEnd = false) => {
+    if (effectiveShowSuggestions) {
+      completeWord(word, sentenceEnd);
+    }
+  };
+
   const commitChar = (char: string) => {
     const output = isShiftActive ? char.toUpperCase() : char;
     commitText(output);
@@ -346,6 +356,7 @@ function KeyboardLayoutImpl({
     }
     deleteBackward(lastSuggestion.applied.length + 1); // +1 for the trailing space
     commitText(lastSuggestion.original);
+    useKeyboardStore.getState().restorePreviousWord();
     trackWord(lastSuggestion.original);
     setLastSuggestion(null);
     // Undoing a fix means the word was meant: don't fix it again on the
@@ -405,7 +416,7 @@ function KeyboardLayoutImpl({
             spaceTypedRef.current = 'space';
             if (endsSentence) setShiftActive(true);
             pendingSentenceEndRef.current = false;
-            trackWord('');
+            finishWord(autoCorrection);
             // Backspace straight after puts the typed word back (see
             // maybeUndoSuggestion), as with a tapped suggestion.
             setLastSuggestion({original: typed, applied: autoCorrection});
@@ -419,8 +430,9 @@ function KeyboardLayoutImpl({
         // same as Gboard - see SENTENCE_END_CHARS.
         if (endsSentence) setShiftActive(true);
         pendingSentenceEndRef.current = false;
+        const finished = currentTypedWord();
         maybeLearnWord();
-        trackWord('');
+        finishWord(finished, endsSentence);
         if (currentLastSuggestion()) setLastSuggestion(null);
         return;
       }
@@ -435,7 +447,7 @@ function KeyboardLayoutImpl({
         } else {
           InputConnection.sendEnter();
         }
-        trackWord('');
+        finishWord(currentTypedWord(), true);
         if (currentLastSuggestion()) setLastSuggestion(null);
         return;
       case 'symbols':
@@ -657,6 +669,9 @@ function KeyboardLayoutImpl({
     // its separating space automatically, as in Gboard - the swiped word
     // itself is left without one, so a suggestion chip can still swap it.
     commitText((swipe.typedBefore ? ' ' : '') + word);
+    // The letters typed before the swipe were a finished word now (the
+    // swipe added the space after them).
+    if (swipe.typedBefore) finishWord(swipe.typedBefore);
     if (effectiveShowSuggestions) {
       setSwipeResult(word, alternatives);
     }

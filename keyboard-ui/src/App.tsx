@@ -172,7 +172,9 @@ export default function App() {
     // Lets an immediate next backspace revert this exact substitution -
     // see KeyboardLayout's maybeUndoSuggestion.
     setLastSuggestion({original: typedWord, applied: word});
-    updateTypedWord('');
+    // Learns the word and shows what usually comes after it - the strip
+    // stays up for the next word instead of hiding.
+    useKeyboardStore.getState().completeWord(word);
   };
 
   // Keeps the typed word and adds the emoji after it ("love" -> "love ❤️ "),
@@ -183,7 +185,7 @@ export default function App() {
     const applied = `${typedWord} ${emoji}`;
     InputConnection.commitText(applied + ' ');
     setLastSuggestion({original: typedWord, applied});
-    updateTypedWord('');
+    useKeyboardStore.getState().completeWord(typedWord);
     useKeyboardStore.getState().addRecentEmoji(emoji);
   };
 
