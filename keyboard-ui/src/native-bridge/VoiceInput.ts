@@ -4,6 +4,7 @@ import {NativeModules} from 'react-native';
 export type VoiceEvent =
   | {type: 'ready'}
   | {type: 'level'; level: number}
+  | {type: 'language'; language: string}
   | {type: 'partial'; text: string}
   | {type: 'result'; text: string}
   | {type: 'end'}
@@ -14,7 +15,7 @@ interface VoiceInputNative {
   isAvailable(): Promise<boolean>;
   hasPermission(): Promise<boolean>;
   requestPermission(): void;
-  start(locale: string): void;
+  start(languages: string[]): void;
   stop(): void;
   cancel(): void;
 }
@@ -41,8 +42,10 @@ export const VoiceInput = {
   requestPermission(): void {
     native?.requestPermission();
   },
-  start(locale: string): void {
-    native?.start(locale);
+  // `languages`: every language the user might speak - the recognizer
+  // detects which one it hears.
+  start(languages: string[]): void {
+    native?.start(languages);
   },
   stop(): void {
     native?.stop();

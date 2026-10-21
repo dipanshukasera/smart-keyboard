@@ -6,6 +6,7 @@ import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {VoiceEvent, VoiceInput} from '../native-bridge/VoiceInput';
 import {useKeyFeedback} from '../hooks/useKeyFeedback';
+import {HoldRepeatKeyView} from './HoldRepeatKeyView';
 
 type Status = 'starting' | 'listening' | 'idle' | 'needsPermission' | 'unavailable';
 
@@ -17,12 +18,21 @@ const ERROR_MESSAGES: Record<string, string> = {
   other: 'Voice typing stopped - tap the mic to try again',
 };
 
-// Language names for the "Speak now" line.
+// Every language voice typing listens for. The keyboard's own language
+// (the EN/हि/ES key) doesn't decide this: the recognizer works out which
+// of these is being spoken.
+const SPEECH_LANGUAGES = ['en-GB', 'hi-IN', 'es-ES'];
+
+// Names for a detected language ("hi", "hi-IN"...), by its first two letters.
 const LANGUAGE_NAMES: Record<string, string> = {
-  'en-GB': 'English',
-  'hi-IN': 'Hindi',
-  'es-ES': 'Spanish',
+  en: 'English',
+  hi: 'Hindi',
+  es: 'Spanish',
 };
+
+// Same hold-to-repeat timing as the keyboard's delete key.
+const HOLD_REPEAT_INITIAL_DELAY_MS = 400;
+const HOLD_REPEAT_INTERVAL_MS = 60;
 
 /**
  * Voice typing (toolbar mic / All tools). Starts listening as soon as it
@@ -32,10 +42,9 @@ const LANGUAGE_NAMES: Record<string, string> = {
  * the mic to stop early or to talk again.
  */
 export function VoicePanel() {
-  const {theme, activeLocale, keyboardSizeScale, setActivePanel} = useKeyboardStore(
+  const {theme, keyboardSizeScale, setActivePanel} = useKeyboardStore(
     useShallow(state => ({
       theme: state.theme,
-      activeLocale: state.activeLocale,
       keyboardSizeScale: state.keyboardSizeScale,
       setActivePanel: state.setActivePanel,
     })),
@@ -43,6 +52,8 @@ export function VoicePanel() {
   const [status, setStatus] = useState<Status>('starting');
   const [partial, setPartial] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  // What the recognizer says it's hearing, once it knows (Android 14+).
+  const [detected, setDetected] = useState<string | null>(null);
   const level = useRef(new Animated.Value(0)).current;
   const fireKeyFeedback = useKeyFeedback();
 
@@ -51,6 +62,7 @@ export function VoicePanel() {
   const start = async (askForMic = false) => {
     setMessage(null);
     setPartial('');
+    setDetected(null);
     if (!(await VoiceInput.isAvailable())) {
       setStatus('unavailable');
       return;
@@ -61,7 +73,7 @@ export function VoicePanel() {
       return;
     }
     setStatus('starting');
-    VoiceInput.start(activeLocale);
+    VoiceInput.start(SPEECH_LANGUAGES);
   };
 
   useEffect(() => {
@@ -72,6 +84,9 @@ export function VoicePanel() {
           return;
         case 'level':
           Animated.timing(level, {toValue: event.level, duration: 100, useNativeDriver: true}).start();
+          return;
+        case 'language':
+          setDetected(LANGUAGE_NAMES[event.language.slice(0, 2).toLowerCase()] ?? null);
           return;
         case 'partial':
           setPartial(event.text);
@@ -118,7 +133,6 @@ export function VoicePanel() {
 
   const listening = status === 'listening' || status === 'starting';
   const ringScale = level.interpolate({inputRange: [0, 1], outputRange: [1, 1.6]});
-  const languageName = LANGUAGE_NAMES[activeLocale] ?? activeLocale;
 
   let headline: string;
   if (status === 'unavailable') {
@@ -128,7 +142,8 @@ export function VoicePanel() {
   } else if (partial) {
     headline = partial;
   } else if (listening) {
-    headline = status === 'starting' ? 'Starting…' : `Speak now · ${languageName}`;
+    headline =
+      status === 'starting' ? 'Starting…' : detected ? `Speak now · ${detected}` : 'Speak now · any language';
   } else {
     headline = message ?? 'Tap the mic to talk';
   }
@@ -171,14 +186,19 @@ export function VoicePanel() {
           onPress={() => setActivePanel('keyboard')}>
           <Text style={{color: theme.keyText, fontWeight: '600'}}>ABC</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.sideKey, {backgroundColor: theme.keyBackground}]}
-          onPress={() => {
+        {/* Hold to keep deleting, like the keyboard's own delete key. The
+            first delete comes from the view's first repeat tick, as there. */}
+        <HoldRepeatKeyView
+          mode="repeat"
+          longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
+          repeatIntervalMs={HOLD_REPEAT_INTERVAL_MS}
+          onRepeatTick={() => {
             fireKeyFeedback();
             InputConnection.deleteBackward(1);
-          }}>
+          }}
+          style={[styles.sideKey, {backgroundColor: theme.keyBackground}]}>
           <Icon name="backspace" size={20} color={theme.keyText} />
-        </TouchableOpacity>
+        </HoldRepeatKeyView>
       </View>
     </View>
   );

@@ -12,6 +12,7 @@ import android.speech.SpeechRecognizer;
 import android.view.inputmethod.InputConnection;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -24,6 +25,8 @@ import java.util.ArrayList;
  * JS (VoicePanel). Emits "onVoiceEvent" with a `type` of:
  *   ready      - listening, the user can speak
  *   level      - input loudness 0..1 (for the mic animation), ~10/second
+ *   language   - the language detected from the speech (BCP-47), when the
+ *                recognizer reports one
  *   partial    - the words so far, `text` (shown live, not yet typed)
  *   result     - final words, `text` - already typed into the field
  *   end        - stopped (after a result, an error, or stop())
@@ -82,9 +85,11 @@ public class VoiceInputModule extends ReactContextBaseJavaModule {
         getReactApplicationContext().startActivity(intent);
     }
 
-    // `locale` is a BCP-47 tag like "en-GB" or "hi-IN".
+    // `languages` are BCP-47 tags like "en-GB", "hi-IN" - every language the
+    // user might speak. The recognizer works out which one is being spoken
+    // rather than being told (see the extras below).
     @ReactMethod
-    public void start(String locale) {
+    public void start(ReadableArray languages) {
         main.post(() -> {
             if (!micAllowed()) {
                 emitError(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS);
@@ -95,7 +100,31 @@ public class VoiceInputModule extends ReactContextBaseJavaModule {
             recognizer.setRecognitionListener(listener);
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale);
+            ArrayList<String> allowed = new ArrayList<>();
+            for (int i = 0; i < languages.size(); i++) allowed.add(languages.getString(i));
+            // The phone's own language leads if we support it - it's the
+            // best guess for a first word - else the first one given.
+            String primary = allowed.get(0);
+            String device = java.util.Locale.getDefault().toLanguageTag();
+            for (String tag : allowed) {
+                if (tag.regionMatches(true, 0, device, 0, 2)) {
+                    primary = tag;
+                    break;
+                }
+            }
+            ArrayList<String> others = new ArrayList<>(allowed);
+            others.remove(primary);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, primary);
+            // Google's recognizer also listens for these (works on every
+            // Android version it's available on)...
+            intent.putStringArrayListExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", others);
+            // ...and Android 13+ recognizers can identify the language
+            // outright, and follow a speaker switching mid-sentence. String
+            // keys so older builds just ignore them.
+            intent.putExtra("android.speech.extra.ENABLE_LANGUAGE_DETECTION", true);
+            intent.putStringArrayListExtra("android.speech.extra.LANGUAGE_DETECTION_ALLOWED_LANGUAGES", allowed);
+            intent.putExtra("android.speech.extra.ENABLE_LANGUAGE_SWITCH", "quick_response");
+            intent.putStringArrayListExtra("android.speech.extra.LANGUAGE_SWITCH_ALLOWED_LANGUAGES", allowed);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
             intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getReactApplicationContext().getPackageName());
@@ -205,6 +234,17 @@ public class VoiceInputModule extends ReactContextBaseJavaModule {
 
         @Override
         public void onEvent(int eventType, Bundle params) {}
+
+        // Android 14+: which language the recognizer decided it's hearing.
+        @Override
+        public void onLanguageDetection(Bundle results) {
+            String detected = results != null ? results.getString("detected_language") : null;
+            if (detected == null || detected.isEmpty()) return;
+            WritableMap event = Arguments.createMap();
+            event.putString("type", "language");
+            event.putString("language", detected);
+            emit(event);
+        }
     };
 
     private void emitType(String type) {
