@@ -29,6 +29,8 @@ const PAGE_ONE = {
   bottomRightPunct: '.',
 };
 
+const DEVANAGARI_DIGITS = ['१', '२', '३', '४', '५', '६', '७', '८', '९', '०'];
+
 const PAGE_TWO = {
   rows: [
     ['~', '`', '|', '•', '√', 'π', '÷', '×', '¶', 'Δ'],
@@ -41,7 +43,7 @@ const PAGE_TWO = {
 };
 
 export function SymbolsNumberPanel() {
-  const {theme, setActivePanel, keyboardSizeScale, keyStyle, keyFontFamily} = useKeyboardStore();
+  const {theme, setActivePanel, keyboardSizeScale, keyStyle, keyFontFamily, activeLocale} = useKeyboardStore();
   // Same key shape/outline/3D/bold as the letter keyboard.
   const decor = keyDecor(keyStyle, theme);
   const [page, setPage] = useState<'one' | 'two'>('one');
@@ -58,6 +60,9 @@ export function SymbolsNumberPanel() {
     return () => subscription.remove();
   }, []);
   const active = page === 'one' ? PAGE_ONE : PAGE_TWO;
+  // While typing Hindi the digit row is Devanagari (१ २ ३…); in every other
+  // language it's 1 2 3…. Everything else on this panel is the same.
+  const rows = page === 'one' && activeLocale === 'hi-IN' ? [DEVANAGARI_DIGITS, ...active.rows.slice(1)] : active.rows;
 
   // Same base values (and the same keyboardSizeScale factor) as
   // KeyboardLayout's main keyboard - this panel used to render at a fixed,
@@ -114,7 +119,7 @@ export function SymbolsNumberPanel() {
 
   return (
     <View style={[styles.container, {backgroundColor: theme.panelBackground}]} onLayout={onBodyLayout}>
-      {active.rows.slice(0, 2).map((row, rowIndex) => (
+      {rows.slice(0, 2).map((row, rowIndex) => (
         <View
           key={rowIndex}
           style={[styles.row, {marginVertical: rowMarginVertical}]}
@@ -145,7 +150,7 @@ export function SymbolsNumberPanel() {
           onPress={() => setPage(page === 'one' ? 'two' : 'one')}>
           <Text style={{color: PILL_TEXT, fontSize: 13 * keyboardSizeScale}}>{active.togglePill}</Text>
         </TouchableOpacity>
-        {active.rows[2].map((symbol, keyIndex) => symbolKey(`2-${keyIndex}`, '2', symbol))}
+        {rows[2].map((symbol, keyIndex) => symbolKey(`2-${keyIndex}`, '2', symbol))}
         <HoldRepeatKeyView
           mode="repeat"
           longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
