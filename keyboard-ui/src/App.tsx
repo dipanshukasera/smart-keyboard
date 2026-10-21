@@ -31,6 +31,7 @@ import {VoicePanel} from './components/VoicePanel';
 import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
 import {useHindiSuggestion} from './hooks/useHindiSuggestion';
+import {prefetchFeed} from './services/gifFeedCache';
 
 const {ClipboardModule, KeyboardSizeModule} = NativeModules;
 
@@ -73,6 +74,9 @@ export default function App() {
 
   useEffect(() => {
     hydrate();
+    // A head start for the GIF panel: wakes the server if it was asleep and
+    // downloads the first previews (see gifFeedCache).
+    prefetchFeed('/api/gif/trending');
   }, [hydrate]);
 
   // Emitted by KeyboardReactView (native) every time focus moves to a

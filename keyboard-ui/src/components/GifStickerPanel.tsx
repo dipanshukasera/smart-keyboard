@@ -20,6 +20,7 @@ import {API_BASE_URL, apiClient} from '../services/api';
 import {KeyboardLayout} from './KeyboardLayout';
 import {ExpressionModeBar} from './ExpressionModeBar';
 import {GifCommit} from '../native-bridge/GifCommit';
+import {cachedFeed, loadCachedFeed, prefetchFeed, rememberFeed} from '../services/gifFeedCache';
 
 interface GifResult {
   id: string;
@@ -42,6 +43,11 @@ interface GifResult {
 export type ContentType = 'gif' | 'sticker' | 'adult';
 
 const {ClipboardModule} = NativeModules;
+
+// First pages of searches already made this session, so tapping a tag chip
+// (or repeating a search) shows its results at once instead of waiting on
+// the server again. Never holds 18+ results.
+const searchCache = new Map<string, {results: GifResult[]; hasMore: boolean}>();
 
 // The backend's mp4 -> .gif endpoint for one 18+ clip. The path ends in
 // .gif because GifCommitModule picks the MIME type it offers the chat app
@@ -216,19 +222,36 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     setHasMore(false);
     pageRef.current = 1;
     (async () => {
-      setResults([]);
-      setLoading(true);
       setError(null);
+      // The feed from last time (memory, else saved on the phone) goes up at
+      // once - its images are already in the image cache - while a fresh one
+      // is fetched behind it. 18+ is never kept (see gifFeedCache), so it
+      // always starts blank.
+      const keepable = contentType !== 'adult';
+      const known = keepable ? cachedFeed(trendingEndpoint) ?? (await loadCachedFeed(trendingEndpoint)) : null;
+      if (queryRef.current.trim()) return;
+      if (known) {
+        setResults(known);
+        setLoading(false);
+      } else {
+        setResults([]);
+        setLoading(true);
+      }
       try {
         const response = await apiClient.get<{results: GifResult[]}>(trendingEndpoint);
         if (!queryRef.current.trim()) {
           // Only apply if the user hasn't since started a real search -
           // don't clobber live results with a slow-to-resolve trending
-          // fetch.
-          setResults(response.data.results);
+          // fetch. Left alone if it's the same set already showing, so the
+          // grid doesn't blink.
+          const fresh = response.data.results;
+          if (keepable) rememberFeed(trendingEndpoint, fresh);
+          const sameAsShown = known && known.length === fresh.length && known.every((item, i) => item.id === fresh[i].id);
+          if (!sameAsShown) setResults(fresh);
         }
       } catch (err: any) {
-        if (!queryRef.current.trim()) {
+        // With the saved feed showing there's nothing to report.
+        if (!queryRef.current.trim() && !known) {
           setError(describeRequestFailure(err, `trending ${typeLabel}`));
         }
       } finally {
@@ -278,6 +301,15 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       setLoadingMore(true);
     }
     setError(null);
+    const cacheKey = contentType === 'adult' || page !== 1 ? null : `${searchEndpoint}|${text.trim().toLowerCase()}`;
+    const known = cacheKey ? searchCache.get(cacheKey) : undefined;
+    if (known) {
+      setHasMore(known.hasMore);
+      pageRef.current = 1;
+      setResults(known.results);
+      setLoading(false);
+      return;
+    }
     try {
       const response = await apiClient.get<{results: GifResult[]; hasMore: boolean}>(searchEndpoint, {
         params: {q: text, page},
@@ -285,6 +317,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       const batch = response.data.results;
       setHasMore(!!response.data.hasMore);
       pageRef.current = page;
+      if (cacheKey && batch.length > 0) searchCache.set(cacheKey, {results: batch, hasMore: !!response.data.hasMore});
       if (page === 1) {
         setResults(batch);
       } else {
@@ -799,6 +832,13 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
             data={results}
             keyExtractor={item => item.id}
             numColumns={3}
+            // Start with what's on screen and keep the render-ahead small:
+            // with the defaults the grid started downloading every preview
+            // (~10MB) at once, so the first ones - the ones in view - came
+            // in last.
+            initialNumToRender={9}
+            maxToRenderPerBatch={6}
+            windowSize={5}
             style={[styles.grid, {maxHeight: gridMaxHeight}]}
             // Keeps offscreen rows from piling up decoded bitmaps as more
             // pages are appended.
