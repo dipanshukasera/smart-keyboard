@@ -133,6 +133,36 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
         }).start();
     }
 
+    // For apps that take no media from a keyboard at all (e.g. a website's
+    // message box in Chrome, like Telegram Web): puts the GIF file itself on
+    // the clipboard, so long-press > Paste in the box attaches it like any
+    // copied picture. A file:// link on the clipboard (the old fallback)
+    // pasted as useless text. The clipboard grants the pasting app read
+    // access to our FileProvider URI.
+    @ReactMethod
+    public void copyGifToClipboard(String remoteUrl, Promise promise) {
+        new Thread(() -> {
+            try {
+                File localFile = remoteUrl.startsWith("file://")
+                        ? new File(Uri.parse(remoteUrl).getPath())
+                        : downloadToCache(remoteUrl);
+                Uri uri = FileProvider.getUriForFile(
+                        getReactApplicationContext(),
+                        getReactApplicationContext().getPackageName() + ".fileprovider",
+                        localFile);
+                ClipData clip = ClipData.newUri(getReactApplicationContext().getContentResolver(), "GIF", uri);
+                android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                        getReactApplicationContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    clipboard.setPrimaryClip(clip);
+                    promise.resolve(true);
+                });
+            } catch (Exception e) {
+                promise.resolve(false);
+            }
+        }).start();
+    }
+
     // How a GIF's video can reach the app being typed into without making
     // the user pick the chat again:
     //  - "box":   its message box takes video - sendVideo commits it there;

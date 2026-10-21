@@ -423,8 +423,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       } else {
         sent = await GifCommit.commitGif(convertedGifUrl(item.videoUrl));
         if (!sent && !(await GifCommit.commitGif(item.fullUrl))) {
-          ClipboardModule?.setClipboardText(item.videoUrl);
-          showFeedback('This app doesn’t accept images directly - link copied, paste it instead');
+          await copyForPasting(convertedGifUrl(item.videoUrl), item.videoUrl);
         }
       }
       cacheForOffline(item, kind === 'gif' && sent ? convertedGifUrl(item.videoUrl) : item.fullUrl);
@@ -440,12 +439,26 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   // under both GIFs and Stickers. 18+ never shows outside the 18+ panel.
   const tabRecents = recentGifs.filter(entry => isForTab(entry, contentType));
 
-  const showFeedback = (message: string) => {
+  const showFeedback = (message: string, durationMs = 1800) => {
     if (feedbackTimeoutRef.current) {
       clearTimeout(feedbackTimeoutRef.current);
     }
     setFeedback(message);
-    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), 1800);
+    feedbackTimeoutRef.current = setTimeout(() => setFeedback(null), durationMs);
+  };
+
+  // The app takes no media from a keyboard (e.g. a website's message box in
+  // Chrome, like Telegram Web): copy the GIF file itself so pasting it into
+  // the box attaches it. Only if that fails, copy `link` (if any) instead.
+  const copyForPasting = async (gifUrl: string, link: string | null) => {
+    if (await GifCommit.copyGifToClipboard(gifUrl)) {
+      showFeedback('This app can’t take GIFs from keyboards - GIF copied: hold the message box and tap Paste', 4000);
+    } else if (link) {
+      ClipboardModule?.setClipboardText(link);
+      showFeedback('This app doesn’t accept images directly - link copied, paste it instead');
+    } else {
+      showFeedback('This app doesn’t accept images directly');
+    }
   };
 
   // GIFs and stickers send the preview-size file the grid has already
@@ -489,8 +502,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     // No confirmation on success - the GIF appearing in the chat is the
     // confirmation. Only the fallback needs saying.
     if (!sentUrl) {
-      ClipboardModule?.setClipboardText(gif.videoUrl || gif.fullUrl);
-      showFeedback('This app doesn’t accept images directly - link copied, paste it instead');
+      await copyForPasting(gif.videoUrl ? convertedGifUrl(gif.videoUrl) : url, gif.videoUrl || gif.fullUrl);
     }
     // A converted GIF is already sitting in the native download cache, so
     // the recents entry can be the animation rather than the still frame.
@@ -535,8 +547,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
   const resendRecent = async (entry: {id: string; previewUri: string; fullUri: string}) => {
     const sent = await GifCommit.commitGif(entry.fullUri);
     if (!sent) {
-      ClipboardModule?.setClipboardText(entry.fullUri);
-      showFeedback('This app doesn’t accept images directly');
+      await copyForPasting(entry.fullUri, null);
     }
     addRecentGif({...entry, timestamp: Date.now()});
   };

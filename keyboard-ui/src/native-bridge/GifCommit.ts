@@ -7,6 +7,7 @@ interface GifCommitNative {
   sendVideo(videoUrl: string): Promise<VideoSendResult>;
   acceptsAnimatedGif(): Promise<boolean>;
   videoRoute(): Promise<VideoRoute>;
+  copyGifToClipboard(url: string): Promise<boolean>;
   commitGif(remoteUrl: string): Promise<boolean>;
   cacheGif(remoteUrl: string): Promise<string>;
 }
@@ -48,6 +49,17 @@ export const GifCommit = {
       return await native.sendVideo(videoUrl);
     } catch {
       return 'none';
+    }
+  },
+
+  // Puts the GIF file itself on the clipboard (for apps that take no media
+  // from a keyboard - the user pastes it). False if it couldn't be fetched.
+  async copyGifToClipboard(url: string): Promise<boolean> {
+    if (!native) return false;
+    try {
+      return await native.copyGifToClipboard(url);
+    } catch {
+      return false;
     }
   },
 
