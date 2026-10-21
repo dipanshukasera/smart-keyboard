@@ -53,6 +53,11 @@ export interface CachedGifEntry {
   // Which panel sent it, so Recent shows it in that panel only. Absent on
   // entries saved before GIFs/Stickers/18+ became separate panels.
   kind?: 'gif' | 'sticker' | 'adult';
+  // 18+ clips only: the clip's mp4 (remote URL; its bytes are in the
+  // native download cache from when it was sent), so a Recent tap can
+  // reopen the preview and send it as a GIF or as video again - fullUri
+  // alone is a still frame or a converted GIF.
+  videoUrl?: string;
 }
 
 export interface LastSuggestion {

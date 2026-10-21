@@ -529,11 +529,24 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     const previewUri = await GifCommit.cacheGif(gif.previewUrl);
     const fullUri = fullUrl === gif.previewUrl ? previewUri : await GifCommit.cacheGif(fullUrl);
     if (previewUri && fullUri) {
-      addRecentGif({id: gif.id, previewUri, fullUri, timestamp: Date.now(), kind: contentType});
+      addRecentGif({
+        id: gif.id,
+        previewUri,
+        fullUri,
+        timestamp: Date.now(),
+        kind: contentType,
+        ...(gif.videoUrl ? {videoUrl: gif.videoUrl} : {}),
+      });
     }
   };
 
-  const resendRecent = async (entry: {id: string; previewUri: string; fullUri: string}) => {
+  const resendRecent = async (entry: CachedGifEntry) => {
+    // An 18+ clip reopens its preview, where Send GIF / Send video both
+    // work again - a bare re-send could only ever put the still image in.
+    if (entry.videoUrl) {
+      onResultPress({id: entry.id, previewUrl: entry.previewUri, fullUrl: entry.fullUri, videoUrl: entry.videoUrl});
+      return;
+    }
     const sent = await GifCommit.commitGif(entry.fullUri);
     if (!sent) {
       await copyForPasting(entry.fullUri, null);
