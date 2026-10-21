@@ -406,9 +406,14 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     try {
       let sent: boolean;
       if (kind === 'video') {
-        // Into the message box where the app takes video, else through the
-        // app's own share screen (GifCommitModule.sendVideo).
-        sent = (await GifCommit.sendVideo(item.videoUrl)) !== 'none';
+        // Straight into the chat: as video where the message box takes it,
+        // as the GIF where it only takes GIFs (WhatsApp, Telegram - they
+        // play it as a looping video), and only otherwise through the
+        // app's share screen (Instagram).
+        sent =
+          (await GifCommit.videoRoute()) === 'gif'
+            ? await GifCommit.commitGif(convertedGifUrl(item.videoUrl))
+            : (await GifCommit.sendVideo(item.videoUrl)) !== 'none';
         if (!sent) {
           // Say so rather than quietly sending something else - the GIF
           // button is right there.
@@ -492,11 +497,18 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
     cacheForOffline(gif, sentUrl && sentUrl !== gif.videoUrl ? sentUrl : stillUrl);
   };
 
-  // Long-press: send as a video in any app that takes one, even where a GIF
-  // would have gone in as a GIF.
+  // Long-press: send as a video - straight into the chat where the message
+  // box takes video. Apps whose box takes GIFs but not video (WhatsApp,
+  // Telegram) get the GIF in the chat directly - they play it as a looping
+  // video - rather than a share screen that makes the user pick the chat
+  // again. Only apps that take neither (Instagram) go through sharing.
   const sendAsVideo = async (gif: GifResult) => {
     const video = videoFor(gif);
     if (!video) return;
+    if ((await GifCommit.videoRoute()) === 'gif') {
+      selectGif(gif);
+      return;
+    }
     showFeedback('Sending as video…');
     if ((await GifCommit.sendVideo(video)) === 'none') {
       showFeedback('This app doesn’t take videos');

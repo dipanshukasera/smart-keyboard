@@ -133,6 +133,28 @@ public class GifCommitModule extends ReactContextBaseJavaModule {
         }).start();
     }
 
+    // How a GIF's video can reach the app being typed into without making
+    // the user pick the chat again:
+    //  - "box":   its message box takes video - sendVideo commits it there;
+    //  - "gif":   it doesn't take video but does take GIFs (WhatsApp,
+    //             Telegram...) - send the GIF into the box instead; those
+    //             apps turn it into their own looping video anyway;
+    //  - "share": neither (Instagram, or no media support at all) - only
+    //             the app's share screen can deliver it.
+    @ReactMethod
+    public void videoRoute(Promise promise) {
+        EditorInfo info = InputConnectionHolder.editorInfo();
+        if (info == null) {
+            promise.resolve("share");
+        } else if (!INSTAGRAM.equals(info.packageName) && accepts(info, "video/mp4")) {
+            promise.resolve("box");
+        } else if (accepts(info, "image/gif") && !GIF_REFUSING_APPS.contains(info.packageName)) {
+            promise.resolve("gif");
+        } else {
+            promise.resolve("share");
+        }
+    }
+
     // Whether the focused field takes an animated GIF from a keyboard - false
     // for apps that refuse them (Instagram), where a GIF is better sent as
     // video (sendVideo) than frozen as a still image.
