@@ -3,7 +3,7 @@ import type {KeyboardTheme} from '../themes/themeTypes';
 import {defaultTheme} from '../themes/default';
 import {ThemeStorage} from '../native-bridge/ThemeStorage';
 import {BackgroundImage} from '../native-bridge/BackgroundImage';
-import {getSuggestions, getSpellingCorrection} from '../services/dictionary';
+import {getSuggestions, getSpellingCorrection, getContraction, isPlainWord} from '../services/dictionary';
 import {getEmojiSuggestion} from '../data/emojiKeywords';
 import {WordPairs, endsSentence, normalizeWord, predictNextWords, recordPair} from '../services/nextWords';
 import {DEFAULT_KEY_STYLE, KeyStyle} from '../themes/keyStyle';
@@ -408,13 +408,25 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     let autoCorrection: string | null = null;
     // Once what's typed so far no longer prefix-matches anything real (or
     // learned), it's stopped looking like a word-in-progress and started
-    // looking like a typo - offer the closest one-edit-away real word as
-    // a chip. Deliberately never applied silently: a plain frequency +
-    // edit-distance match can't reliably tell "hello" from "help" (both
-    // are one edit from "helo", and "help" is simply the more common word
-    // overall) - only a real language model could, so the user always
-    // confirms by tapping rather than risking a confidently wrong swap.
-    if (word.length >= 3 && suggestions.length === 0) {
+    // looking like a typo - offer the likeliest one-edit-away real word as
+    // a chip, and apply it when space is pressed if Auto-correct is on
+    // (backspace straight after undoes it - see KeyboardLayout). A word
+    // frequency list can't tell every case apart ("helo" could be "hello"
+    // or "help"), which is why the undo and the learned-word exemption
+    // below exist.
+    // Only plain words (letters, nothing else) are ever corrected: a typed
+    // "hello," is a word plus a comma, and "fixing" it deletes the comma.
+    const plain = isPlainWord(word);
+    // The user has typed this exact word before and taught the keyboard
+    // (or undid a correction of it - that learns it too): leave it alone.
+    const isLearned = learnedWords.some(w => w.toLowerCase() === word.toLowerCase());
+    // Contractions typed without the apostrophe ("dont" -> "don't") are
+    // offered first, even though the word list counts them as real words.
+    const contraction = plain && !isLearned ? getContraction(activeLocale, word) : null;
+    if (contraction) {
+      suggestions = [contraction, ...suggestions].slice(0, 3);
+      if (word !== word.toUpperCase() || word.length === 1) autoCorrection = contraction;
+    } else if (plain && word.length >= 3 && suggestions.length === 0) {
       const correction = getSpellingCorrection(activeLocale, word);
       if (correction) {
         // Match the typed word's own capitalization (e.g. a
@@ -425,9 +437,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
           firstChar !== firstChar.toLowerCase() ? correction.charAt(0).toUpperCase() + correction.slice(1) : correction,
         ];
         // Auto-correct applies the same fix on space - but not to an
-        // all-caps word (likely an acronym) or one the user has typed
-        // before and taught the keyboard.
-        const isLearned = learnedWords.some(w => w.toLowerCase() === word.toLowerCase());
+        // all-caps word (likely an acronym) or one the user has taught.
         if (word !== word.toUpperCase() && !isLearned) autoCorrection = suggestions[0];
       }
     }
