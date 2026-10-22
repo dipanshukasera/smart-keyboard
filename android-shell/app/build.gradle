@@ -32,7 +32,23 @@ android {
         versionName "1.0.9"
     }
 
+    // The private release key lives outside the repo (see
+    // ~/.smart-keyboard-signing/keystore.properties). Without it - on a
+    // machine that doesn't have the key - release builds fall back to the
+    // public debug key.
+    def releaseProps = new Properties()
+    def releasePropsFile = new File(System.getProperty("user.home"), ".smart-keyboard-signing/keystore.properties")
+    if (releasePropsFile.exists()) releasePropsFile.withInputStream { releaseProps.load(it) }
+
     signingConfigs {
+        if (releasePropsFile.exists()) {
+            release {
+                storeFile file(releaseProps['storeFile'])
+                storePassword releaseProps['storePassword']
+                keyAlias releaseProps['keyAlias']
+                keyPassword releaseProps['keyPassword']
+            }
+        }
         debug {
             storeFile file("debug.keystore")
             storePassword "android"
@@ -43,10 +59,9 @@ android {
 
     buildTypes {
         release {
-            // Signed with the debug key so it installs on a device/emulator
-            // without a real release keystore. Do not ship a build signed
-            // this way - generate a proper release keystore first.
-            signingConfig signingConfigs.debug
+            // Private release key when present, else the public debug key
+            // (fine for local testing, never for shipping).
+            signingConfig releasePropsFile.exists() ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
