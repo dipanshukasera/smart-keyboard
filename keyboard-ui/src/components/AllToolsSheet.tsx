@@ -3,6 +3,7 @@ import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {ImeSwitcher} from '../native-bridge/ImeSwitcher';
+import {FloatingKeyboard} from '../native-bridge/FloatingKeyboard';
 import {PanelSheet} from './PanelSheet';
 
 interface ToolCard {
@@ -18,7 +19,7 @@ interface ToolCard {
  * "Keyboard Toolbar Explorations" reference's "All tools" screen).
  */
 export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) {
-  const {theme, setActivePanel, adultGifsEnabled} = useKeyboardStore();
+  const {theme, setActivePanel, adultGifsEnabled, floating} = useKeyboardStore();
 
   const tools: ToolCard[] = [
     {id: 'gifs', label: 'GIFs', iconName: 'gif', onPress: () => setActivePanel('gif')},
@@ -37,6 +38,17 @@ export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) 
     // SettingsPanel) - the reference's "Sounds" is one section within it
     // (Key sound), not a separate feature with its own state.
     {id: 'sounds', label: 'Sounds', iconName: 'music-note', onPress: () => setActivePanel('settings')},
+    // The keyboard as a card you can drag anywhere on the screen. Back to the
+    // keys first, so it floats with the letters showing.
+    {
+      id: 'floating',
+      label: floating ? 'Dock' : 'Floating',
+      iconName: floating ? 'open-in-full' : 'picture-in-picture-alt',
+      onPress: () => {
+        setActivePanel('keyboard');
+        FloatingKeyboard.setFloating(!floating);
+      },
+    },
     // Android's own keyboard picker - used to be a long-press on space,
     // which kept popping up mid-typing when a space was held a bit long.
     {id: 'switchKeyboard', label: 'Switch keyboard', iconName: 'keyboard', onPress: () => ImeSwitcher.showPicker()},

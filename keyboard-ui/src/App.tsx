@@ -23,6 +23,7 @@ import {ThemeCustomizer} from './components/ThemeCustomizer';
 import {ClipboardPanel} from './components/ClipboardPanel';
 import {LearnedWordsPanel} from './components/LearnedWordsPanel';
 import {NumericPanel} from './components/NumericPanel';
+import {NumberKeypad} from './components/NumberKeypad';
 import {AllToolsSheet} from './components/AllToolsSheet';
 import {FontPanel} from './components/FontPanel';
 import {SettingsPanel} from './components/SettingsPanel';
@@ -33,6 +34,7 @@ import {useTranslationPanel} from './hooks/useTranslationPanel';
 import {useHindiSuggestion} from './hooks/useHindiSuggestion';
 import {prefetchFeed} from './services/gifFeedCache';
 import {readLatestCopy} from './services/clipSuggestion';
+import {FloatingKeyboard} from './native-bridge/FloatingKeyboard';
 import {backgroundFrame} from './themes/imageTheme';
 import {BackgroundAdjust} from './components/BackgroundAdjust';
 import {BackgroundImage} from './native-bridge/BackgroundImage';
@@ -48,6 +50,7 @@ export default function App() {
     suggestions,
     emojiSuggestion,
     clipSuggestion,
+    isNumericField,
     typedWord,
     isToolbarExpanded,
     setToolbarExpanded,
@@ -85,12 +88,28 @@ export default function App() {
     // (see gifFeedCache). Waits for the saved settings, so 18+ is only
     // fetched for someone who turned it on.
     refreshClipSuggestion();
+    // Is the keyboard floating (it remembers across sessions)? Native owns
+    // that; this and the event below keep the store in step.
+    FloatingKeyboard.isFloating().then(on => useKeyboardStore.getState().setFloatingState(on));
+    const floatingSubscription = DeviceEventEmitter.addListener('onFloatingChanged', (event: {floating: boolean}) => {
+      useKeyboardStore.getState().setFloatingState(!!event?.floating);
+    });
     hydrate().then(() => {
       prefetchFeed('/api/gif/trending');
       prefetchFeed('/api/gif/stickers/trending');
       if (useKeyboardStore.getState().adultGifsEnabled) prefetchFeed('/api/gif/adult/trending');
     });
+    return () => floatingSubscription.remove();
   }, [hydrate]);
+
+  // The strip under a floating keyboard's keys (its drag handle) takes the
+  // theme's colours: the panel colour (a photo theme's base colour) and the
+  // key text colour for the grip.
+  useEffect(() => {
+    const surface = theme.backgroundBase ?? theme.panelBackground;
+    const toHex = (color: string, fallback: string) => (/^#[0-9a-fA-F]{6}/.test(color) ? color.slice(0, 7) : fallback);
+    FloatingKeyboard.setHandleColors(toHex(surface, '#F3F5F8'), toHex(theme.keyText, '#808080'));
+  }, [theme]);
 
   // Emitted by KeyboardReactView (native) every time focus moves to a
   // different field - not just once at mount - so a password field is
@@ -302,7 +321,9 @@ export default function App() {
       case 'learnedWords':
         return <LearnedWordsPanel />;
       case 'numericPad':
-        return <NumericPanel />;
+        // A real number field gets the plain pad; the full keypad (+ - * /,
+        // %, =) is what the symbols panel's "1234" key opens.
+        return isNumericField ? <NumericPanel /> : <NumberKeypad />;
       case 'allTools':
         return <AllToolsSheet onOpenClipboard={openClipboardPanel} />;
       case 'font':
@@ -351,7 +372,9 @@ export default function App() {
   // learned words, settings and the other sheets). A numeric field's
   // number pad gets no toolbar either - it's single-purpose, and Gboard
   // shows no icon row there.
-  const showsToolbarRow = !pendingPhoto && (activePanel === 'keyboard' || activePanel === 'symbols');
+  const showsToolbarRow =
+    !pendingPhoto &&
+    (activePanel === 'keyboard' || activePanel === 'symbols' || (activePanel === 'numericPad' && !isNumericField));
 
   // Where a framed photo theme's picture sits behind the keyboard, worked out
   // from the keyboard's current size (null until it has one, or for a theme

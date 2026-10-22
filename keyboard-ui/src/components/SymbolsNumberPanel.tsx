@@ -124,11 +124,7 @@ export function SymbolsNumberPanel() {
           key={rowIndex}
           style={[styles.row, {marginVertical: rowMarginVertical}]}
           onLayout={trackRowLayout(String(rowIndex))}>
-          {/* The second row is inset half a key on each side, like the
-              letter keyboard's (a-l under q-p). */}
-          {rowIndex === 1 && <View style={styles.rowInset} />}
           {row.map((symbol, keyIndex) => symbolKey(`${rowIndex}-${keyIndex}`, String(rowIndex), symbol))}
-          {rowIndex === 1 && <View style={styles.rowInset} />}
         </View>
       ))}
 
@@ -194,6 +190,23 @@ export function SymbolsNumberPanel() {
           <Text style={{color: PILL_TEXT, fontSize: 13 * keyboardSizeScale}}>ABC</Text>
         </TouchableOpacity>
         {symbolKey('3-left', '3', active.bottomLeftPunct)}
+        {/* The number keypad (digits and + - * / % =), as Gboard's "1234" key. */}
+        <TouchableOpacity
+          activeOpacity={1}
+          style={[
+            styles.key,
+            decor.key,
+            {flex: 1, backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical},
+          ]}
+          onPressIn={() => {
+            fireKeyFeedback();
+            setActivePanel('numericPad');
+          }}
+          accessibilityLabel="Number keypad">
+          <Text style={{color: theme.keyText, fontSize: 11 * keyboardSizeScale, fontWeight: '700', lineHeight: 13 * keyboardSizeScale, textAlign: 'center'}}>
+            {'1 2\n3 4'}
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={1}
           style={[
@@ -239,9 +252,6 @@ export function SymbolsNumberPanel() {
 }
 
 const styles = StyleSheet.create({
-  rowInset: {
-    flex: 0.5,
-  },
   container: {
     paddingVertical: 4,
   },

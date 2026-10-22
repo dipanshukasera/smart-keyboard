@@ -26,6 +26,7 @@ public class KeyboardBridgePackage implements ReactPackage {
         modules.add(new BackgroundImageModule(reactContext));
         modules.add(new VoiceInputModule(reactContext));
         modules.add(new EmojiSupportModule(reactContext));
+        modules.add(new FloatingKeyboardModule(reactContext));
         return modules;
     }
 

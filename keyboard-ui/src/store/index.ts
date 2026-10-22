@@ -112,6 +112,9 @@ interface KeyboardState {
   // support this.
   keyboardSizeScale: number;
   isShiftActive: boolean;
+  // Caps lock: capitals stay on, not just for the next letter (switched on by
+  // double-tapping shift, off by tapping shift again). Implies isShiftActive.
+  capsLock: boolean;
   // DeepL language codes (e.g. "ES", "EN-US") remembered across sessions
   // so the user doesn't have to re-pick a language pair every time they
   // open the bar - null source means "auto-detect", null target means
@@ -191,6 +194,9 @@ interface KeyboardState {
   // stays away until something new is copied.
   clipSuggestion: {text: string; key: string} | null;
   handledClipKey: string | null;
+  // Floating mode (the keyboard is a card you can drag anywhere). The source
+  // of truth is native (ImeService); App keeps this in step with its events.
+  floating: boolean;
   // Next-word prediction (services/nextWords.ts): which word follows which
   // in what the user types, the last finished word of this sentence (lower
   // case; null at a sentence start or in a fresh field), and the one
@@ -241,6 +247,7 @@ interface KeyboardState {
   setKeyboardSizeScale: (scale: number) => void;
   toggleShift: () => void;
   setShiftActive: (active: boolean) => void;
+  setCapsLock: (on: boolean) => void;
   // Forget everything about what was being typed - the current word, its
   // suggestions/emoji, the pending suggestion-undo - so a newly focused
   // field (or the keyboard reopened, even in the same app) starts fresh.
@@ -279,6 +286,7 @@ interface KeyboardState {
   offerClipSuggestion: (clip: {text: string; key: string} | null) => void;
   // The chip was used, or the keyboard closed: take it off the tray.
   finishClipSuggestion: () => void;
+  setFloatingState: (floating: boolean) => void;
   // After undoing a correction: the word before is the previous one again.
   restorePreviousWord: () => void;
   // After a swipe: `word` was typed (without a trailing space), and the
@@ -301,6 +309,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   customThemes: [],
   keyboardSizeScale: 1,
   isShiftActive: false,
+  capsLock: false,
   translateSourceLocale: null,
   translateTargetLocale: null,
   typedWord: '',
@@ -331,6 +340,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   priorWord: null,
   clipSuggestion: null,
   handledClipKey: null,
+  floating: false,
   hapticFeedbackEnabled: true,
   keySoundEnabled: false,
   swipeTypingTrailEnabled: true,
@@ -387,10 +397,14 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(KEYBOARD_SIZE_SCALE_KEY, scale);
   },
 
-  toggleShift: () => set({isShiftActive: !get().isShiftActive}),
+  // Typing a letter turns one-shot shift off by toggling it; with caps lock on
+  // it stays.
+  toggleShift: () => set(state => (state.capsLock ? {} : {isShiftActive: !state.isShiftActive})),
 
   resetTypingSession: () =>
-    set({
+    set(state => ({
+      // A new field starts without caps lock.
+      ...(state.capsLock ? {capsLock: false, isShiftActive: false} : {}),
       previousWord: null,
       priorWord: null,
       typedWord: '',
@@ -399,8 +413,11 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       emojiSuggestion: null,
       lastSuggestion: null,
       isToolbarExpanded: false,
-    }),
-  setShiftActive: active => set({isShiftActive: active}),
+    })),
+
+  setShiftActive: active => set(state => (state.capsLock && !active ? {} : {isShiftActive: active})),
+
+  setCapsLock: on => set({capsLock: on, isShiftActive: on}),
 
   setTranslateSourceLocale: locale => {
     set({translateSourceLocale: locale});
@@ -634,6 +651,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     const offer = clip && clip.key !== handledClipKey && !isSensitiveField && !isIncognito;
     set({clipSuggestion: offer ? {text: clip.text.slice(0, 1000), key: clip.key} : null});
   },
+
+  setFloatingState: floating => set({floating}),
 
   finishClipSuggestion: () => {
     const current = get().clipSuggestion;

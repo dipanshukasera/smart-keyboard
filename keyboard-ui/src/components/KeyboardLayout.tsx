@@ -44,6 +44,8 @@ const LAYOUTS: Record<string, LayoutDef> = {
 // themes - these aren't derived from the user's chosen KeyboardTheme.
 const NUMBER_HINTS = '1234567890';
 const DOUBLE_SPACE_PERIOD_WINDOW_MS = 300;
+// Two taps of shift this close together switch caps lock on.
+const SHIFT_DOUBLE_TAP_WINDOW_MS = 350;
 // Auto-capitalization: like Gboard, shift auto-activates for the very next
 // letter at the start of a fresh field and after a sentence-ending
 // punctuation mark is followed by a space (or Enter, which always starts a
@@ -155,6 +157,7 @@ function KeyboardLayoutImpl({
     activeLocale,
     theme,
     isShiftActive,
+    capsLock,
     toggleShift,
     setShiftActive,
     setActivePanel,
@@ -177,6 +180,7 @@ function KeyboardLayoutImpl({
       activeLocale: state.activeLocale,
       theme: state.theme,
       isShiftActive: state.isShiftActive,
+      capsLock: state.capsLock,
       toggleShift: state.toggleShift,
       setShiftActive: state.setShiftActive,
       setActivePanel: state.setActivePanel,
@@ -199,6 +203,7 @@ function KeyboardLayoutImpl({
   const currentTypedWord = () => useKeyboardStore.getState().typedWord;
   const currentLastSuggestion = () => useKeyboardStore.getState().lastSuggestion;
   const lastSpaceTimeRef = useRef(0);
+  const lastShiftTapRef = useRef(0);
   // Auto-capitalization, mid-sentence case: set by commitChar whenever the
   // most recently typed character was a sentence-ender (. ! ?), consumed
   // the moment the following space arrives (see the space handler below).
@@ -412,9 +417,23 @@ function KeyboardLayoutImpl({
     // deleted the last letter, taking it for the first space).
     if (keyDef.action !== 'space') lastSpaceTimeRef.current = 0;
     switch (keyDef.action) {
-      case 'shift':
-        toggleShift();
+      case 'shift': {
+        // Two quick taps turn caps lock on (capitals until shift is tapped
+        // again); one tap is shift for the next letter only.
+        const now = Date.now();
+        const state = useKeyboardStore.getState();
+        if (state.capsLock) {
+          state.setCapsLock(false);
+          lastShiftTapRef.current = 0;
+        } else if (now - lastShiftTapRef.current < SHIFT_DOUBLE_TAP_WINDOW_MS) {
+          state.setCapsLock(true);
+          lastShiftTapRef.current = 0;
+        } else {
+          lastShiftTapRef.current = now;
+          toggleShift();
+        }
         return;
+      }
       case 'space': {
         const now = Date.now();
         let endsSentence = pendingSentenceEndRef.current;
@@ -947,6 +966,7 @@ function KeyboardLayoutImpl({
             let backgroundColor = theme.keyBackground;
             if (isPill) backgroundColor = PILL_BACKGROUND;
             else if (isAccent) backgroundColor = theme.accent;
+            else if (isShiftKey && capsLock) backgroundColor = theme.accent;
             else if (isShiftKey && isShiftActive) backgroundColor = theme.keyPressedBackground;
             else if (isDimKey) backgroundColor = dimmed(theme.keyBackground, 0.55);
 
@@ -959,7 +979,9 @@ function KeyboardLayoutImpl({
               ? PILL_TEXT
               : isAccent
                 ? '#FFFFFF'
-                : isShiftKey && isShiftActive
+                : isShiftKey && capsLock
+                  ? '#FFFFFF'
+                  : isShiftKey && isShiftActive
                   ? theme.accent
                   : isDimKey
                     ? dimmed(theme.keyText, 0.8)

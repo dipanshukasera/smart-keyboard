@@ -1,10 +1,18 @@
 package com.yourco.keyboard;
 
 import android.content.Context;
+import android.graphics.Outline;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
+import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.ReactRootView;
 import com.facebook.react.bridge.Arguments;
@@ -34,6 +42,22 @@ public class KeyboardReactView {
 
     private final ReactRootView reactRootView;
     private final ReactInstanceManager reactInstanceManager;
+
+    // What's handed to the IME window: frame > card > (keys, drag handle). When
+    // docked the frame and card are plain pass-throughs around the keys. When
+    // floating, the frame gives the card room for its shadow, the card is
+    // rounded, and the handle under the keys shows - drag it to move the
+    // keyboard, or tap the corner button to dock it again.
+    private final FrameLayout frame;
+    private final LinearLayout card;
+    private final FrameLayout handleBar;
+    private final GradientDrawable gripShape;
+    private final ImageView dockButton;
+    private final float density;
+    private int surfaceColor = 0xFFF3F5F8;
+    private boolean floatingDecor;
+    private float dragDownX, dragDownY;
+    private int dragStartX, dragStartY;
 
     KeyboardReactView(Context context) {
         // Re-read on every onMeasure() below rather than captured once
@@ -73,7 +97,63 @@ public class KeyboardReactView {
                 super.onMeasure(widthMeasureSpec, exactHeightSpec);
             }
         };
-        reactRootView.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fallbackHeightPx));
+        density = initialMetrics.density;
+        card = new LinearLayout(context);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.addView(reactRootView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, fallbackHeightPx));
+
+        handleBar = new FrameLayout(context);
+        View grip = new View(context);
+        gripShape = new GradientDrawable();
+        gripShape.setCornerRadius(dp(2));
+        gripShape.setColor(0x66808080);
+        grip.setBackground(gripShape);
+        handleBar.addView(grip, new FrameLayout.LayoutParams(dp(44), dp(4), Gravity.CENTER));
+        dockButton = new ImageView(context);
+        dockButton.setImageResource(R.drawable.ic_dock);
+        dockButton.setColorFilter(0x99808080);
+        dockButton.setPadding(dp(5), dp(5), dp(5), dp(5));
+        dockButton.setContentDescription("Dock keyboard");
+        dockButton.setOnClickListener(v -> {
+            ImeService service = ImeService.instance;
+            if (service != null) service.setFloating(false);
+        });
+        handleBar.addView(dockButton, new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.END | Gravity.CENTER_VERTICAL));
+        handleBar.setOnTouchListener((v, event) -> {
+            ImeService service = ImeService.instance;
+            if (service == null) return false;
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dragDownX = event.getRawX();
+                    dragDownY = event.getRawY();
+                    dragStartX = service.floatX();
+                    dragStartY = service.floatY();
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    service.moveFloatingTo(
+                            dragStartX + Math.round(event.getRawX() - dragDownX),
+                            dragStartY + Math.round(event.getRawY() - dragDownY));
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    // The lift carries the final position: land exactly where
+                    // the finger let go, even if the last move was skipped.
+                    service.moveFloatingTo(
+                            dragStartX + Math.round(event.getRawX() - dragDownX),
+                            dragStartY + Math.round(event.getRawY() - dragDownY));
+                    service.saveFloatingPosition();
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    service.saveFloatingPosition();
+                    return true;
+                default:
+                    return false;
+            }
+        });
+        handleBar.setVisibility(View.GONE);
+        card.addView(handleBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
+
+        frame = new FrameLayout(context);
+        frame.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // App.tsx measures its own real content (see the inner wrapper's
         // onLayout) and reports it here via KeyboardSizeModule - whenever
@@ -126,7 +206,62 @@ public class KeyboardReactView {
     }
 
     View getView() {
-        return reactRootView;
+        return frame;
+    }
+
+    private int dp(float value) {
+        return Math.round(value * density);
+    }
+
+    // Switches the card between docked (plain) and floating (rounded, shadowed,
+    // with the drag handle showing).
+    void setFloatingDecor(boolean floating) {
+        floatingDecor = floating;
+        int pad = floating ? dp(10) : 0;
+        frame.setPadding(pad, pad, pad, pad);
+        handleBar.setVisibility(floating ? View.VISIBLE : View.GONE);
+        if (floating) {
+            card.setBackgroundColor(surfaceColor);
+            card.setClipToOutline(true);
+            card.setOutlineProvider(new ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, Outline outline) {
+                    outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(22));
+                }
+            });
+            card.setElevation(dp(10));
+        } else {
+            card.setBackground(null);
+            card.setClipToOutline(false);
+            card.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            card.setElevation(0);
+        }
+        frame.requestLayout();
+    }
+
+    // The theme's colours for the strip under the keys.
+    void setHandleColors(int surface, int grip) {
+        surfaceColor = surface;
+        handleBar.setBackgroundColor(surface);
+        gripShape.setColor((grip & 0x00FFFFFF) | 0x66000000);
+        dockButton.setColorFilter((grip & 0x00FFFFFF) | 0xAA000000);
+        if (floatingDecor) card.setBackgroundColor(surface);
+    }
+
+    // The window's width and height as laid out right now, in px.
+    int frameWidth() { return frame.getWidth(); }
+    int frameHeight() { return frame.getHeight(); }
+
+    void emitFloatingChanged(boolean floating) {
+        ReactContext reactContext = reactInstanceManager.getCurrentReactContext();
+        if (reactContext == null) {
+            return;
+        }
+        WritableMap params = Arguments.createMap();
+        params.putBoolean("floating", floating);
+        reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit("onFloatingChanged", params);
     }
 
     // Without these, ReactInstanceManager's lifecycle state never leaves
