@@ -28,8 +28,8 @@ android {
         // shows (match the release tag, e.g. v1.0.8 -> "1.0.8"), and
         // versionCode must go up or a phone won't install it over the
         // previous one. versionCode = major*10000 + minor*100 + patch.
-        versionCode 10008
-        versionName "1.0.8"
+        versionCode 10009
+        versionName "1.0.9"
     }
 
     signingConfigs {
