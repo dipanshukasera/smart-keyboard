@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     height: 38,
     paddingHorizontal: 16,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   clipChip: {
     flexDirection: 'row',
