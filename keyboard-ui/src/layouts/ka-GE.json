@@ -1,0 +1,126 @@
+{
+ "locale": "ka-GE",
+ "displayName": "ქართული",
+ "rows": [
+  [
+   {
+    "key": "ქ"
+   },
+   {
+    "key": "წ"
+   },
+   {
+    "key": "ე"
+   },
+   {
+    "key": "რ"
+   },
+   {
+    "key": "ტ"
+   },
+   {
+    "key": "ყ"
+   },
+   {
+    "key": "უ"
+   },
+   {
+    "key": "ი"
+   },
+   {
+    "key": "ო"
+   },
+   {
+    "key": "პ"
+   }
+  ],
+  [
+   {
+    "key": "ა"
+   },
+   {
+    "key": "ს"
+   },
+   {
+    "key": "დ"
+   },
+   {
+    "key": "ფ"
+   },
+   {
+    "key": "გ"
+   },
+   {
+    "key": "ჰ"
+   },
+   {
+    "key": "ჯ"
+   },
+   {
+    "key": "კ"
+   },
+   {
+    "key": "ლ"
+   }
+  ],
+  [
+   {
+    "key": "ზ"
+   },
+   {
+    "key": "ხ"
+   },
+   {
+    "key": "ც"
+   },
+   {
+    "key": "ვ"
+   },
+   {
+    "key": "ბ"
+   },
+   {
+    "key": "ნ"
+   },
+   {
+    "key": "მ"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "ქართული"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ]
+}

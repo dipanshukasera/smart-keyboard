@@ -1,5 +1,5 @@
 import React from 'react';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {LANGUAGE_PACKS} from '../layouts/registry';
@@ -14,6 +14,7 @@ export function LanguagePackPanel() {
 
   return (
     <PanelSheet title="Languages">
+      <ScrollView style={styles.list} showsVerticalScrollIndicator persistentScrollbar nestedScrollEnabled>
       {LANGUAGE_PACKS.map(pack => {
         const selected = pack.code === activeLocale;
         return (
@@ -25,21 +26,25 @@ export function LanguagePackPanel() {
               setActivePanel('keyboard');
             }}>
             <View style={[styles.badge, {backgroundColor: selected ? theme.accent : theme.keyBackground}]}>
-              <Text style={{color: selected ? '#FFFFFF' : theme.keyText, fontSize: 12, fontWeight: '700'}}>{pack.label}</Text>
+              <Text style={{color: selected ? '#FFFFFF' : theme.keyText, fontSize: 11, fontWeight: '700'}}>{pack.label}</Text>
             </View>
             <View style={styles.names}>
-              <Text style={{color: theme.keyText, fontSize: 16}}>{pack.nativeName}</Text>
+              <Text style={{color: theme.keyText, fontSize: 16, textAlign: 'left', writingDirection: 'ltr'}}>{pack.nativeName}</Text>
               {pack.nativeName !== pack.name && <Text style={{color: theme.keyText + '99', fontSize: 12}}>{pack.name}</Text>}
             </View>
             {selected && <Icon name="check" size={20} color={theme.accent} />}
           </TouchableOpacity>
         );
       })}
+      </ScrollView>
     </PanelSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  list: {
+    height: 300,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

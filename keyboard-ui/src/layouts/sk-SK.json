@@ -1,0 +1,226 @@
+{
+ "locale": "sk-SK",
+ "displayName": "Slovenčina",
+ "rows": [
+  [
+   {
+    "key": "q"
+   },
+   {
+    "key": "w"
+   },
+   {
+    "key": "e"
+   },
+   {
+    "key": "r"
+   },
+   {
+    "key": "t"
+   },
+   {
+    "key": "z"
+   },
+   {
+    "key": "u"
+   },
+   {
+    "key": "i"
+   },
+   {
+    "key": "o"
+   },
+   {
+    "key": "p"
+   }
+  ],
+  [
+   {
+    "key": "a"
+   },
+   {
+    "key": "s"
+   },
+   {
+    "key": "d"
+   },
+   {
+    "key": "f"
+   },
+   {
+    "key": "g"
+   },
+   {
+    "key": "h"
+   },
+   {
+    "key": "j"
+   },
+   {
+    "key": "k"
+   },
+   {
+    "key": "l"
+   }
+  ],
+  [
+   {
+    "key": "shift",
+    "action": "shift",
+    "width": 1.5
+   },
+   {
+    "key": "y"
+   },
+   {
+    "key": "x"
+   },
+   {
+    "key": "c"
+   },
+   {
+    "key": "v"
+   },
+   {
+    "key": "b"
+   },
+   {
+    "key": "n"
+   },
+   {
+    "key": "m"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "page",
+    "action": "page",
+    "width": 1,
+    "label": "1/2"
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "Slovenčina"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "á"
+    },
+    {
+     "key": "ä"
+    },
+    {
+     "key": "č"
+    },
+    {
+     "key": "ď"
+    },
+    {
+     "key": "é"
+    },
+    {
+     "key": "í"
+    },
+    {
+     "key": "ĺ"
+    },
+    {
+     "key": "ľ"
+    },
+    {
+     "key": "ň"
+    }
+   ],
+   [
+    {
+     "key": "ó"
+    },
+    {
+     "key": "ô"
+    },
+    {
+     "key": "ŕ"
+    },
+    {
+     "key": "š"
+    },
+    {
+     "key": "ť"
+    },
+    {
+     "key": "ú"
+    },
+    {
+     "key": "ý"
+    },
+    {
+     "key": "ž"
+    }
+   ],
+   [
+    {
+     "key": "shift",
+     "action": "shift",
+     "width": 1.5
+    },
+    {
+     "key": "–"
+    },
+    {
+     "key": "-"
+    },
+    {
+     "key": ":"
+    },
+    {
+     "key": ";"
+    },
+    {
+     "key": "!"
+    },
+    {
+     "key": "?"
+    },
+    {
+     "key": "delete",
+     "action": "delete",
+     "width": 1.5
+    }
+   ]
+  ]
+ ]
+}

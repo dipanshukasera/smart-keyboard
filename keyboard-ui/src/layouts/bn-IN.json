@@ -1,0 +1,284 @@
+{
+ "locale": "bn-IN",
+ "displayName": "বাংলা",
+ "rows": [
+  [
+   {
+    "key": "ক"
+   },
+   {
+    "key": "খ"
+   },
+   {
+    "key": "গ"
+   },
+   {
+    "key": "ঘ"
+   },
+   {
+    "key": "ঙ"
+   },
+   {
+    "key": "চ"
+   },
+   {
+    "key": "ছ"
+   },
+   {
+    "key": "জ"
+   },
+   {
+    "key": "ঝ"
+   }
+  ],
+  [
+   {
+    "key": "ঞ"
+   },
+   {
+    "key": "ট"
+   },
+   {
+    "key": "ঠ"
+   },
+   {
+    "key": "ড"
+   },
+   {
+    "key": "ঢ"
+   },
+   {
+    "key": "ণ"
+   },
+   {
+    "key": "ত"
+   },
+   {
+    "key": "থ"
+   },
+   {
+    "key": "দ"
+   }
+  ],
+  [
+   {
+    "key": "ধ"
+   },
+   {
+    "key": "ন"
+   },
+   {
+    "key": "প"
+   },
+   {
+    "key": "ফ"
+   },
+   {
+    "key": "ব"
+   },
+   {
+    "key": "ভ"
+   },
+   {
+    "key": "ম"
+   },
+   {
+    "key": "য"
+   },
+   {
+    "key": "র"
+   }
+  ],
+  [
+   {
+    "key": "ল"
+   },
+   {
+    "key": "শ"
+   },
+   {
+    "key": "ষ"
+   },
+   {
+    "key": "স"
+   },
+   {
+    "key": "হ"
+   },
+   {
+    "key": "ড়"
+   },
+   {
+    "key": "ঢ়"
+   },
+   {
+    "key": "য়"
+   },
+   {
+    "key": "ৎ"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "page",
+    "action": "page",
+    "width": 1,
+    "label": "1/2"
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "বাংলা"
+   },
+   {
+    "key": "।",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "অ"
+    },
+    {
+     "key": "আ"
+    },
+    {
+     "key": "ই"
+    },
+    {
+     "key": "ঈ"
+    },
+    {
+     "key": "উ"
+    },
+    {
+     "key": "ঊ"
+    }
+   ],
+   [
+    {
+     "key": "ঋ"
+    },
+    {
+     "key": "এ"
+    },
+    {
+     "key": "ঐ"
+    },
+    {
+     "key": "ও"
+    },
+    {
+     "key": "ঔ"
+    }
+   ],
+   [
+    {
+     "key": "া",
+     "dim": true,
+     "label": "◌া"
+    },
+    {
+     "key": "ি",
+     "dim": true,
+     "label": "◌ি"
+    },
+    {
+     "key": "ী",
+     "dim": true,
+     "label": "◌ী"
+    },
+    {
+     "key": "ু",
+     "dim": true,
+     "label": "◌ু"
+    },
+    {
+     "key": "ূ",
+     "dim": true,
+     "label": "◌ূ"
+    },
+    {
+     "key": "ৃ",
+     "dim": true,
+     "label": "◌ৃ"
+    },
+    {
+     "key": "ে",
+     "dim": true,
+     "label": "◌ে"
+    }
+   ],
+   [
+    {
+     "key": "ৈ",
+     "dim": true,
+     "label": "◌ৈ"
+    },
+    {
+     "key": "ো",
+     "dim": true,
+     "label": "◌ো"
+    },
+    {
+     "key": "ৌ",
+     "dim": true,
+     "label": "◌ৌ"
+    },
+    {
+     "key": "্",
+     "dim": true,
+     "label": "◌্"
+    },
+    {
+     "key": "ং",
+     "dim": true,
+     "label": "◌ং"
+    },
+    {
+     "key": "ঃ",
+     "dim": true,
+     "label": "◌ঃ"
+    },
+    {
+     "key": "ঁ",
+     "dim": true,
+     "label": "◌ঁ"
+    },
+    {
+     "key": "delete",
+     "action": "delete",
+     "width": 1.5
+    }
+   ]
+  ]
+ ]
+}

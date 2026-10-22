@@ -1,0 +1,128 @@
+{
+ "locale": "el-GR",
+ "displayName": "Ελληνικά",
+ "rows": [
+  [
+   {
+    "key": "ς"
+   },
+   {
+    "key": "ε"
+   },
+   {
+    "key": "ρ"
+   },
+   {
+    "key": "τ"
+   },
+   {
+    "key": "υ"
+   },
+   {
+    "key": "θ"
+   },
+   {
+    "key": "ι"
+   },
+   {
+    "key": "ο"
+   },
+   {
+    "key": "π"
+   }
+  ],
+  [
+   {
+    "key": "α"
+   },
+   {
+    "key": "σ"
+   },
+   {
+    "key": "δ"
+   },
+   {
+    "key": "φ"
+   },
+   {
+    "key": "γ"
+   },
+   {
+    "key": "η"
+   },
+   {
+    "key": "ξ"
+   },
+   {
+    "key": "κ"
+   },
+   {
+    "key": "λ"
+   }
+  ],
+  [
+   {
+    "key": "shift",
+    "action": "shift",
+    "width": 1.5
+   },
+   {
+    "key": "ζ"
+   },
+   {
+    "key": "χ"
+   },
+   {
+    "key": "ψ"
+   },
+   {
+    "key": "ω"
+   },
+   {
+    "key": "β"
+   },
+   {
+    "key": "ν"
+   },
+   {
+    "key": "μ"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "Ελληνικά"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ]
+}

@@ -1,0 +1,241 @@
+{
+ "locale": "ta-IN",
+ "displayName": "தமிழ்",
+ "rows": [
+  [
+   {
+    "key": "க"
+   },
+   {
+    "key": "ங"
+   },
+   {
+    "key": "ச"
+   },
+   {
+    "key": "ஞ"
+   },
+   {
+    "key": "ட"
+   },
+   {
+    "key": "ண"
+   },
+   {
+    "key": "த"
+   },
+   {
+    "key": "ந"
+   }
+  ],
+  [
+   {
+    "key": "ப"
+   },
+   {
+    "key": "ம"
+   },
+   {
+    "key": "ய"
+   },
+   {
+    "key": "ர"
+   },
+   {
+    "key": "ல"
+   },
+   {
+    "key": "வ"
+   },
+   {
+    "key": "ழ"
+   },
+   {
+    "key": "ள"
+   }
+  ],
+  [
+   {
+    "key": "ற"
+   },
+   {
+    "key": "ன"
+   },
+   {
+    "key": "ஜ"
+   },
+   {
+    "key": "ஷ"
+   },
+   {
+    "key": "ஸ"
+   },
+   {
+    "key": "ஹ"
+   },
+   {
+    "key": "க்ஷ"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "page",
+    "action": "page",
+    "width": 1,
+    "label": "1/2"
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "தமிழ்"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "அ"
+    },
+    {
+     "key": "ஆ"
+    },
+    {
+     "key": "இ"
+    },
+    {
+     "key": "ஈ"
+    },
+    {
+     "key": "உ"
+    },
+    {
+     "key": "ஊ"
+    }
+   ],
+   [
+    {
+     "key": "எ"
+    },
+    {
+     "key": "ஏ"
+    },
+    {
+     "key": "ஐ"
+    },
+    {
+     "key": "ஒ"
+    },
+    {
+     "key": "ஓ"
+    },
+    {
+     "key": "ஔ"
+    }
+   ],
+   [
+    {
+     "key": "ா",
+     "dim": true,
+     "label": "◌ா"
+    },
+    {
+     "key": "ி",
+     "dim": true,
+     "label": "◌ி"
+    },
+    {
+     "key": "ீ",
+     "dim": true,
+     "label": "◌ீ"
+    },
+    {
+     "key": "ு",
+     "dim": true,
+     "label": "◌ு"
+    },
+    {
+     "key": "ூ",
+     "dim": true,
+     "label": "◌ூ"
+    },
+    {
+     "key": "ெ",
+     "dim": true,
+     "label": "◌ெ"
+    },
+    {
+     "key": "ே",
+     "dim": true,
+     "label": "◌ே"
+    }
+   ],
+   [
+    {
+     "key": "ை",
+     "dim": true,
+     "label": "◌ை"
+    },
+    {
+     "key": "ொ",
+     "dim": true,
+     "label": "◌ொ"
+    },
+    {
+     "key": "ோ",
+     "dim": true,
+     "label": "◌ோ"
+    },
+    {
+     "key": "ௌ",
+     "dim": true,
+     "label": "◌ௌ"
+    },
+    {
+     "key": "்",
+     "dim": true,
+     "label": "◌்"
+    },
+    {
+     "key": "ஃ",
+     "dim": true,
+     "label": "◌ஃ"
+    },
+    {
+     "key": "delete",
+     "action": "delete",
+     "width": 1.5
+    }
+   ]
+  ]
+ ]
+}

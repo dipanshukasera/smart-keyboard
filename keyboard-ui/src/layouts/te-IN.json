@@ -1,0 +1,297 @@
+{
+ "locale": "te-IN",
+ "displayName": "తెలుగు",
+ "rows": [
+  [
+   {
+    "key": "క"
+   },
+   {
+    "key": "ఖ"
+   },
+   {
+    "key": "గ"
+   },
+   {
+    "key": "ఘ"
+   },
+   {
+    "key": "ఙ"
+   },
+   {
+    "key": "చ"
+   },
+   {
+    "key": "ఛ"
+   },
+   {
+    "key": "జ"
+   },
+   {
+    "key": "ఝ"
+   }
+  ],
+  [
+   {
+    "key": "ఞ"
+   },
+   {
+    "key": "ట"
+   },
+   {
+    "key": "ఠ"
+   },
+   {
+    "key": "డ"
+   },
+   {
+    "key": "ఢ"
+   },
+   {
+    "key": "ణ"
+   },
+   {
+    "key": "త"
+   },
+   {
+    "key": "థ"
+   },
+   {
+    "key": "ద"
+   }
+  ],
+  [
+   {
+    "key": "ధ"
+   },
+   {
+    "key": "న"
+   },
+   {
+    "key": "ప"
+   },
+   {
+    "key": "ఫ"
+   },
+   {
+    "key": "బ"
+   },
+   {
+    "key": "భ"
+   },
+   {
+    "key": "మ"
+   },
+   {
+    "key": "య"
+   },
+   {
+    "key": "ర"
+   }
+  ],
+  [
+   {
+    "key": "ల"
+   },
+   {
+    "key": "వ"
+   },
+   {
+    "key": "శ"
+   },
+   {
+    "key": "ష"
+   },
+   {
+    "key": "స"
+   },
+   {
+    "key": "హ"
+   },
+   {
+    "key": "ళ"
+   },
+   {
+    "key": "ఱ"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "page",
+    "action": "page",
+    "width": 1,
+    "label": "1/2"
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "తెలుగు"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "అ"
+    },
+    {
+     "key": "ఆ"
+    },
+    {
+     "key": "ఇ"
+    },
+    {
+     "key": "ఈ"
+    },
+    {
+     "key": "ఉ"
+    },
+    {
+     "key": "ఊ"
+    },
+    {
+     "key": "ఋ"
+    }
+   ],
+   [
+    {
+     "key": "ఎ"
+    },
+    {
+     "key": "ఏ"
+    },
+    {
+     "key": "ఐ"
+    },
+    {
+     "key": "ఒ"
+    },
+    {
+     "key": "ఓ"
+    },
+    {
+     "key": "ఔ"
+    }
+   ],
+   [
+    {
+     "key": "ా",
+     "dim": true,
+     "label": "◌ా"
+    },
+    {
+     "key": "ి",
+     "dim": true,
+     "label": "◌ి"
+    },
+    {
+     "key": "ీ",
+     "dim": true,
+     "label": "◌ీ"
+    },
+    {
+     "key": "ు",
+     "dim": true,
+     "label": "◌ు"
+    },
+    {
+     "key": "ూ",
+     "dim": true,
+     "label": "◌ూ"
+    },
+    {
+     "key": "ృ",
+     "dim": true,
+     "label": "◌ృ"
+    },
+    {
+     "key": "ె",
+     "dim": true,
+     "label": "◌ె"
+    },
+    {
+     "key": "ే",
+     "dim": true,
+     "label": "◌ే"
+    }
+   ],
+   [
+    {
+     "key": "ై",
+     "dim": true,
+     "label": "◌ై"
+    },
+    {
+     "key": "ొ",
+     "dim": true,
+     "label": "◌ొ"
+    },
+    {
+     "key": "ో",
+     "dim": true,
+     "label": "◌ో"
+    },
+    {
+     "key": "ౌ",
+     "dim": true,
+     "label": "◌ౌ"
+    },
+    {
+     "key": "్",
+     "dim": true,
+     "label": "◌్"
+    },
+    {
+     "key": "ం",
+     "dim": true,
+     "label": "◌ం"
+    },
+    {
+     "key": "ః",
+     "dim": true,
+     "label": "◌ః"
+    },
+    {
+     "key": "ఁ",
+     "dim": true,
+     "label": "◌ఁ"
+    },
+    {
+     "key": "delete",
+     "action": "delete",
+     "width": 1.5
+    }
+   ]
+  ]
+ ]
+}

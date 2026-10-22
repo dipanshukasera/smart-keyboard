@@ -1,0 +1,143 @@
+{
+ "locale": "bg-BG",
+ "displayName": "Български",
+ "rows": [
+  [
+   {
+    "key": "я"
+   },
+   {
+    "key": "в"
+   },
+   {
+    "key": "е"
+   },
+   {
+    "key": "р"
+   },
+   {
+    "key": "т"
+   },
+   {
+    "key": "ъ"
+   },
+   {
+    "key": "у"
+   },
+   {
+    "key": "и"
+   },
+   {
+    "key": "о"
+   },
+   {
+    "key": "п"
+   },
+   {
+    "key": "ч"
+   },
+   {
+    "key": "ш"
+   }
+  ],
+  [
+   {
+    "key": "а"
+   },
+   {
+    "key": "с"
+   },
+   {
+    "key": "д"
+   },
+   {
+    "key": "ф"
+   },
+   {
+    "key": "г"
+   },
+   {
+    "key": "х"
+   },
+   {
+    "key": "й"
+   },
+   {
+    "key": "к"
+   },
+   {
+    "key": "л"
+   },
+   {
+    "key": "щ"
+   }
+  ],
+  [
+   {
+    "key": "shift",
+    "action": "shift",
+    "width": 1.5
+   },
+   {
+    "key": "з"
+   },
+   {
+    "key": "ь"
+   },
+   {
+    "key": "ц"
+   },
+   {
+    "key": "ж"
+   },
+   {
+    "key": "б"
+   },
+   {
+    "key": "н"
+   },
+   {
+    "key": "м"
+   },
+   {
+    "key": "ю"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "Български"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ]
+}

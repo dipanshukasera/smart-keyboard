@@ -47,7 +47,8 @@ export function getWordList(locale: string): string[] | null {
 
 export function getSuggestions(locale: string, prefix: string, limit: number = 3): string[] {
   if (!prefix) return [];
-  const words = FREQUENCY_LISTS[locale] ?? FREQUENCY_LISTS['en-GB'];
+  const words = FREQUENCY_LISTS[locale];
+  if (!words) return [];
   const lowerPrefix = prefix.toLowerCase();
   const matches: string[] = [];
   for (const word of words) {

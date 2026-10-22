@@ -1,0 +1,407 @@
+{
+ "locale": "ne-NP",
+ "displayName": "नेपाली",
+ "numberHints": false,
+ "rows": [
+  [
+   {
+    "key": "अ",
+    "dim": true
+   },
+   {
+    "key": "आ",
+    "dim": true
+   },
+   {
+    "key": "इ",
+    "dim": true
+   },
+   {
+    "key": "ई",
+    "dim": true
+   },
+   {
+    "key": "उ",
+    "dim": true
+   },
+   {
+    "key": "ऊ",
+    "dim": true
+   },
+   {
+    "key": "ए",
+    "dim": true
+   },
+   {
+    "key": "ऐ",
+    "dim": true
+   },
+   {
+    "key": "ओ",
+    "dim": true
+   },
+   {
+    "key": "औ",
+    "dim": true
+   }
+  ],
+  [
+   {
+    "key": "क"
+   },
+   {
+    "key": "ख"
+   },
+   {
+    "key": "ग"
+   },
+   {
+    "key": "घ"
+   },
+   {
+    "key": "च"
+   },
+   {
+    "key": "छ"
+   },
+   {
+    "key": "ज"
+   },
+   {
+    "key": "झ"
+   },
+   {
+    "key": "ं",
+    "label": "◌ं",
+    "dim": true
+   },
+   {
+    "key": "ँ",
+    "label": "◌ँ",
+    "dim": true
+   }
+  ],
+  [
+   {
+    "key": "ट"
+   },
+   {
+    "key": "ठ"
+   },
+   {
+    "key": "ड"
+   },
+   {
+    "key": "ढ"
+   },
+   {
+    "key": "ण"
+   },
+   {
+    "key": "त"
+   },
+   {
+    "key": "थ"
+   },
+   {
+    "key": "द"
+   },
+   {
+    "key": "ध"
+   },
+   {
+    "key": "न"
+   }
+  ],
+  [
+   {
+    "key": "प"
+   },
+   {
+    "key": "फ"
+   },
+   {
+    "key": "ब"
+   },
+   {
+    "key": "भ"
+   },
+   {
+    "key": "म"
+   },
+   {
+    "key": "य"
+   },
+   {
+    "key": "र"
+   },
+   {
+    "key": "ल"
+   },
+   {
+    "key": "व"
+   },
+   {
+    "key": "श"
+   }
+  ],
+  [
+   {
+    "key": "page",
+    "action": "page"
+   },
+   {
+    "key": "ष"
+   },
+   {
+    "key": "स"
+   },
+   {
+    "key": "ह"
+   },
+   {
+    "key": "ज्ञ"
+   },
+   {
+    "key": "क्ष"
+   },
+   {
+    "key": "श्र"
+   },
+   {
+    "key": "ऋ",
+    "dim": true
+   },
+   {
+    "key": "़",
+    "label": "◌़",
+    "dim": true
+   },
+   {
+    "key": "delete",
+    "action": "delete"
+   }
+  ],
+  [
+   {
+    "key": "?१२३",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ","
+   },
+   {
+    "key": "😀",
+    "action": "emoji"
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 4,
+    "label": "नेपाली"
+   },
+   {
+    "key": "।"
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "ा",
+     "dim": true,
+     "label": "◌ा"
+    },
+    {
+     "key": "ि",
+     "dim": true,
+     "label": "◌ि"
+    },
+    {
+     "key": "ी",
+     "dim": true,
+     "label": "◌ी"
+    },
+    {
+     "key": "ु",
+     "dim": true,
+     "label": "◌ु"
+    },
+    {
+     "key": "ू",
+     "dim": true,
+     "label": "◌ू"
+    },
+    {
+     "key": "े",
+     "dim": true,
+     "label": "◌े"
+    },
+    {
+     "key": "ै",
+     "dim": true,
+     "label": "◌ै"
+    },
+    {
+     "key": "ो",
+     "dim": true,
+     "label": "◌ो"
+    },
+    {
+     "key": "ौ",
+     "dim": true,
+     "label": "◌ौ"
+    },
+    {
+     "key": "ृ",
+     "dim": true,
+     "label": "◌ृ"
+    }
+   ],
+   [
+    {
+     "key": "ं",
+     "label": "◌ं"
+    },
+    {
+     "key": "ँ",
+     "label": "◌ँ"
+    },
+    {
+     "key": "ः",
+     "label": "◌ः"
+    },
+    {
+     "key": "्",
+     "label": "◌्"
+    },
+    {
+     "key": "़",
+     "label": "◌़"
+    },
+    {
+     "key": "ॅ",
+     "label": "◌ॅ"
+    },
+    {
+     "key": "ॉ",
+     "label": "◌ॉ"
+    },
+    {
+     "key": "ॐ"
+    },
+    {
+     "key": "ऽ"
+    },
+    {
+     "key": "॰"
+    }
+   ],
+   [
+    {
+     "key": "ऑ"
+    },
+    {
+     "key": "ऍ"
+    },
+    {
+     "key": "ऋ"
+    },
+    {
+     "key": "ॠ"
+    },
+    {
+     "key": "ऌ"
+    },
+    {
+     "key": "ॡ"
+    },
+    {
+     "key": "ऎ"
+    },
+    {
+     "key": "ऒ"
+    },
+    {
+     "key": "ऄ"
+    },
+    {
+     "key": "ॲ"
+    }
+   ],
+   [
+    {
+     "key": "क़"
+    },
+    {
+     "key": "ख़"
+    },
+    {
+     "key": "ग़"
+    },
+    {
+     "key": "ज़"
+    },
+    {
+     "key": "ड़"
+    },
+    {
+     "key": "ढ़"
+    },
+    {
+     "key": "फ़"
+    },
+    {
+     "key": "य़"
+    },
+    {
+     "key": "ऩ"
+    },
+    {
+     "key": "ऱ"
+    }
+   ],
+   [
+    {
+     "key": "page",
+     "action": "page"
+    },
+    {
+     "key": "क्ष"
+    },
+    {
+     "key": "त्र"
+    },
+    {
+     "key": "ज्ञ"
+    },
+    {
+     "key": "श्र"
+    },
+    {
+     "key": "द्व"
+    },
+    {
+     "key": "द्य"
+    },
+    {
+     "key": "ह्म"
+    },
+    {
+     "key": "ख्य"
+    },
+    {
+     "key": "delete",
+     "action": "delete"
+    }
+   ]
+  ]
+ ]
+}

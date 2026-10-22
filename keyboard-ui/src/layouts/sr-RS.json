@@ -1,0 +1,143 @@
+{
+ "locale": "sr-RS",
+ "displayName": "Српски",
+ "rows": [
+  [
+   {
+    "key": "љ"
+   },
+   {
+    "key": "њ"
+   },
+   {
+    "key": "е"
+   },
+   {
+    "key": "р"
+   },
+   {
+    "key": "т"
+   },
+   {
+    "key": "з"
+   },
+   {
+    "key": "у"
+   },
+   {
+    "key": "и"
+   },
+   {
+    "key": "о"
+   },
+   {
+    "key": "п"
+   },
+   {
+    "key": "ш"
+   }
+  ],
+  [
+   {
+    "key": "а"
+   },
+   {
+    "key": "с"
+   },
+   {
+    "key": "д"
+   },
+   {
+    "key": "ф"
+   },
+   {
+    "key": "г"
+   },
+   {
+    "key": "х"
+   },
+   {
+    "key": "ј"
+   },
+   {
+    "key": "к"
+   },
+   {
+    "key": "л"
+   },
+   {
+    "key": "ч"
+   },
+   {
+    "key": "ћ"
+   }
+  ],
+  [
+   {
+    "key": "shift",
+    "action": "shift",
+    "width": 1.5
+   },
+   {
+    "key": "ж"
+   },
+   {
+    "key": "џ"
+   },
+   {
+    "key": "ц"
+   },
+   {
+    "key": "в"
+   },
+   {
+    "key": "б"
+   },
+   {
+    "key": "н"
+   },
+   {
+    "key": "м"
+   },
+   {
+    "key": "ђ"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "Српски"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ]
+}
