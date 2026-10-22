@@ -240,6 +240,11 @@ interface KeyboardState {
   // re-framed. Held here, not in the Themes panel: the photo picker takes
   // over the screen, and the keyboard resets to its letters when it comes
   // back - which used to throw away a panel's own state.
+  // Size of the letter keyboard's body as last laid out, so the symbols
+  // panel can fill exactly the same space and the window never changes height
+  // when switching between them.
+  keyboardBodySize: {width: number; height: number} | null;
+  setKeyboardBodySize: (size: {width: number; height: number}) => void;
   pendingPhoto: {theme: KeyboardTheme; isNew: boolean} | null;
   setPendingPhoto: (pending: {theme: KeyboardTheme; isNew: boolean} | null) => void;
   // Replaces the custom theme with the same id (re-framing a photo theme).
@@ -368,6 +373,12 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveTheme(theme);
   },
 
+  keyboardBodySize: null,
+  setKeyboardBodySize: size => {
+    const current = get().keyboardBodySize;
+    if (current && current.width === size.width && current.height === size.height) return;
+    set({keyboardBodySize: size});
+  },
   pendingPhoto: null,
   setPendingPhoto: pending => set({pendingPhoto: pending}),
 

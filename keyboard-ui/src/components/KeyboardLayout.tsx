@@ -604,6 +604,10 @@ function KeyboardLayoutImpl({
   };
 
   const handleBodyLayout = (event: LayoutChangeEvent) => {
+    if (showSuggestions && !compact && oneHandedMode === 'off') {
+      const {width, height} = event.nativeEvent.layout;
+      useKeyboardStore.getState().setKeyboardBodySize({width, height});
+    }
     onBodyLayout(event);
     bodyRef.current?.measure((_x, _y, _width, _height, pageX, pageY) => {
       bodyOriginRef.current = {x: pageX, y: pageY};

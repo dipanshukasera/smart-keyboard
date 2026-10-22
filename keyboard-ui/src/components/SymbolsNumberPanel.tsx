@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {DeviceEventEmitter, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {DeviceEventEmitter, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
@@ -76,6 +76,13 @@ export function SymbolsNumberPanel() {
   const keyIconSize = 20 * keyboardSizeScale;
   const rowMarginVertical = 2 * keyboardSizeScale;
 
+  // Fill exactly the letter keyboard's space (same width only - after a
+  // rotation the old size no longer applies).
+  const {width: windowWidth} = useWindowDimensions();
+  const bodySize = useKeyboardStore(state => state.keyboardBodySize);
+  const fixedHeight = bodySize && Math.abs(bodySize.width - windowWidth) < 2 ? bodySize.height : null;
+  const rowFill = fixedHeight != null ? {flex: 1} : null;
+
   const commit = (text: string) => InputConnection.commitText(text);
   // Sound/vibration on every key, same as the letter keyboard.
   const fireKeyFeedback = useKeyFeedback();
@@ -118,17 +125,19 @@ export function SymbolsNumberPanel() {
   );
 
   return (
-    <View style={[styles.container, {backgroundColor: theme.panelBackground}]} onLayout={onBodyLayout}>
+    <View
+      style={[styles.container, fixedHeight != null && {height: fixedHeight}, {backgroundColor: theme.panelBackground}]}
+      onLayout={onBodyLayout}>
       {rows.slice(0, 2).map((row, rowIndex) => (
         <View
           key={rowIndex}
-          style={[styles.row, {marginVertical: rowMarginVertical}]}
+          style={[styles.row, rowFill, {marginVertical: rowMarginVertical}]}
           onLayout={trackRowLayout(String(rowIndex))}>
           {row.map((symbol, keyIndex) => symbolKey(`${rowIndex}-${keyIndex}`, String(rowIndex), symbol))}
         </View>
       ))}
 
-      <View style={[styles.row, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('2')}>
+      <View style={[styles.row, rowFill, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('2')}>
         <TouchableOpacity
           activeOpacity={1}
           style={[
@@ -171,7 +180,7 @@ export function SymbolsNumberPanel() {
         </HoldRepeatKeyView>
       </View>
 
-      <View style={[styles.row, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('3')}>
+      <View style={[styles.row, rowFill, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('3')}>
         <TouchableOpacity
           activeOpacity={1}
           style={[
