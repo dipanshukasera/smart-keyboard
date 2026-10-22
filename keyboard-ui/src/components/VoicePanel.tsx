@@ -1,3 +1,4 @@
+import {LANGUAGE_PACKS} from '../layouts/registry';
 import React, {useEffect, useRef, useState} from 'react';
 import {Animated, DeviceEventEmitter, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -21,7 +22,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 // Every language voice typing listens for. The keyboard's own language
 // (the EN/हि/ES key) doesn't decide this: the recognizer works out which
 // of these is being spoken.
-const SPEECH_LANGUAGES = ['en-GB', 'hi-IN', 'es-ES'];
+const SPEECH_LANGUAGES = LANGUAGE_PACKS.map(pack => pack.code);
 
 // Names for a detected language ("hi", "hi-IN"...), by its first two letters.
 const LANGUAGE_NAMES: Record<string, string> = {

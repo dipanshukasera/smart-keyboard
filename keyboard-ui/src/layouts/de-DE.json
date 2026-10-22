@@ -1,0 +1,211 @@
+{
+ "locale": "de-DE",
+ "displayName": "Deutsch",
+ "rows": [
+  [
+   {
+    "key": "q"
+   },
+   {
+    "key": "w"
+   },
+   {
+    "key": "e"
+   },
+   {
+    "key": "r"
+   },
+   {
+    "key": "t"
+   },
+   {
+    "key": "z"
+   },
+   {
+    "key": "u"
+   },
+   {
+    "key": "i"
+   },
+   {
+    "key": "o"
+   },
+   {
+    "key": "p"
+   }
+  ],
+  [
+   {
+    "key": "a"
+   },
+   {
+    "key": "s"
+   },
+   {
+    "key": "d"
+   },
+   {
+    "key": "f"
+   },
+   {
+    "key": "g"
+   },
+   {
+    "key": "h"
+   },
+   {
+    "key": "j"
+   },
+   {
+    "key": "k"
+   },
+   {
+    "key": "l"
+   }
+  ],
+  [
+   {
+    "key": "shift",
+    "action": "shift",
+    "width": 1.5
+   },
+   {
+    "key": "y"
+   },
+   {
+    "key": "x"
+   },
+   {
+    "key": "c"
+   },
+   {
+    "key": "v"
+   },
+   {
+    "key": "b"
+   },
+   {
+    "key": "n"
+   },
+   {
+    "key": "m"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "ä",
+    "action": "page",
+    "width": 1,
+    "label": "äöü"
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "Deutsch"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "ä"
+    },
+    {
+     "key": "ö"
+    },
+    {
+     "key": "ü"
+    },
+    {
+     "key": "ß"
+    },
+    {
+     "key": "é"
+    },
+    {
+     "key": "è"
+    },
+    {
+     "key": "ê"
+    },
+    {
+     "key": "à"
+    },
+    {
+     "key": "â"
+    }
+   ],
+   [
+    {
+     "key": "ô"
+    },
+    {
+     "key": "û"
+    },
+    {
+     "key": "î"
+    },
+    {
+     "key": "ë"
+    },
+    {
+     "key": "ç"
+    }
+   ],
+   [
+    {
+     "key": "shift",
+     "action": "shift",
+     "width": 1.5
+    },
+    {
+     "key": "–"
+    },
+    {
+     "key": "-"
+    },
+    {
+     "key": ":"
+    },
+    {
+     "key": ";"
+    },
+    {
+     "key": "delete",
+     "action": "delete",
+     "width": 1.5
+    }
+   ]
+  ]
+ ]
+}

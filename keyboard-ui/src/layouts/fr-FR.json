@@ -1,0 +1,232 @@
+{
+ "locale": "fr-FR",
+ "displayName": "Français",
+ "rows": [
+  [
+   {
+    "key": "a"
+   },
+   {
+    "key": "z"
+   },
+   {
+    "key": "e"
+   },
+   {
+    "key": "r"
+   },
+   {
+    "key": "t"
+   },
+   {
+    "key": "y"
+   },
+   {
+    "key": "u"
+   },
+   {
+    "key": "i"
+   },
+   {
+    "key": "o"
+   },
+   {
+    "key": "p"
+   }
+  ],
+  [
+   {
+    "key": "q"
+   },
+   {
+    "key": "s"
+   },
+   {
+    "key": "d"
+   },
+   {
+    "key": "f"
+   },
+   {
+    "key": "g"
+   },
+   {
+    "key": "h"
+   },
+   {
+    "key": "j"
+   },
+   {
+    "key": "k"
+   },
+   {
+    "key": "l"
+   },
+   {
+    "key": "m"
+   }
+  ],
+  [
+   {
+    "key": "shift",
+    "action": "shift",
+    "width": 1.5
+   },
+   {
+    "key": "w"
+   },
+   {
+    "key": "x"
+   },
+   {
+    "key": "c"
+   },
+   {
+    "key": "v"
+   },
+   {
+    "key": "b"
+   },
+   {
+    "key": "n"
+   },
+   {
+    "key": "delete",
+    "action": "delete",
+    "width": 1.5
+   }
+  ],
+  [
+   {
+    "key": "123",
+    "action": "symbols",
+    "width": 1.5
+   },
+   {
+    "key": ",",
+    "width": 1
+   },
+   {
+    "key": "é",
+    "action": "page",
+    "width": 1,
+    "label": "àé"
+   },
+   {
+    "key": "😀",
+    "action": "emoji",
+    "width": 1
+   },
+   {
+    "key": "space",
+    "action": "space",
+    "width": 3,
+    "label": "Français"
+   },
+   {
+    "key": ".",
+    "width": 1
+   },
+   {
+    "key": "enter",
+    "action": "enter",
+    "width": 1.5
+   }
+  ]
+ ],
+ "extraPages": [
+  [
+   [
+    {
+     "key": "é"
+    },
+    {
+     "key": "è"
+    },
+    {
+     "key": "ê"
+    },
+    {
+     "key": "ë"
+    },
+    {
+     "key": "à"
+    },
+    {
+     "key": "â"
+    },
+    {
+     "key": "ù"
+    },
+    {
+     "key": "û"
+    },
+    {
+     "key": "ü"
+    },
+    {
+     "key": "ô"
+    }
+   ],
+   [
+    {
+     "key": "î"
+    },
+    {
+     "key": "ï"
+    },
+    {
+     "key": "ç"
+    },
+    {
+     "key": "œ"
+    },
+    {
+     "key": "æ"
+    },
+    {
+     "key": "ÿ"
+    },
+    {
+     "key": "«"
+    },
+    {
+     "key": "»"
+    }
+   ],
+   [
+    {
+     "key": "shift",
+     "action": "shift",
+     "width": 1.5
+    },
+    {
+     "key": "…"
+    },
+    {
+     "key": "’"
+    },
+    {
+     "key": "-"
+    },
+    {
+     "key": ":"
+    },
+    {
+     "key": ";"
+    },
+    {
+     "key": "!"
+    },
+    {
+     "key": "?"
+    },
+    {
+     "key": "delete",
+     "action": "delete",
+     "width": 1.5
+    }
+   ]
+  ]
+ ]
+}

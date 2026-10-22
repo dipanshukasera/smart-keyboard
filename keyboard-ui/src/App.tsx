@@ -16,6 +16,7 @@ import {KeyboardLayout} from './components/KeyboardLayout';
 import {EmojiPanel} from './components/EmojiPanel';
 import {GifStickerPanel} from './components/GifStickerPanel';
 import {SymbolsNumberPanel} from './components/SymbolsNumberPanel';
+import {LanguagePackPanel} from './components/LanguagePackPanel';
 import {LanguageSwitcher} from './components/LanguageSwitcher';
 import {TranslatePanel} from './components/TranslatePanel';
 import {LanguagePickerModal} from './components/LanguagePickerModal';
@@ -334,6 +335,8 @@ export default function App() {
         return <ToolbarOrderPanel />;
       case 'voice':
         return <VoicePanel />;
+      case 'languages':
+        return <LanguagePackPanel />;
       case 'keyboard':
       default:
         return <KeyboardLayout />;

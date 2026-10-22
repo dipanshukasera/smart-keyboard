@@ -24,7 +24,8 @@ export type PanelType =
   | 'font'
   | 'settings'
   | 'toolbarOrder'
-  | 'voice';
+  | 'voice'
+  | 'languages';
 export type OneHandedMode = 'off' | 'left' | 'right';
 
 // Every tool the "All tools" grid and the toolbar's own row can show - a

@@ -52,6 +52,7 @@ export function AllToolsSheet({onOpenClipboard}: {onOpenClipboard: () => void}) 
     // Android's own keyboard picker - used to be a long-press on space,
     // which kept popping up mid-typing when a space was held a bit long.
     {id: 'switchKeyboard', label: 'Switch keyboard', iconName: 'keyboard', onPress: () => ImeSwitcher.showPicker()},
+    {id: 'languages', label: 'Languages', iconName: 'language', onPress: () => setActivePanel('languages')},
     {id: 'settings', label: 'Settings', iconName: 'settings', onPress: () => setActivePanel('settings')},
   ];
 

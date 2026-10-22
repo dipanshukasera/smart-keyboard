@@ -1,28 +1,23 @@
 import React from 'react';
 import {StyleSheet, Text, TouchableOpacity} from 'react-native';
 import {useKeyboardStore} from '../store';
+import {LANGUAGE_PACKS} from '../layouts/registry';
 
-const AVAILABLE_LOCALES = [
-  {code: 'en-GB', label: 'EN'},
-  {code: 'hi-IN', label: 'हि'},
-  {code: 'es-ES', label: 'ES'},
-];
-
+// Tap opens the language packs; a long press flips straight to the next one.
 export function LanguageSwitcher() {
-  const {activeLocale, setActiveLocale, theme} = useKeyboardStore();
+  const {activeLocale, setActiveLocale, setActivePanel, theme} = useKeyboardStore();
 
   const cycleLocale = () => {
-    const currentIndex = AVAILABLE_LOCALES.findIndex(l => l.code === activeLocale);
-    const next = AVAILABLE_LOCALES[(currentIndex + 1) % AVAILABLE_LOCALES.length];
-    setActiveLocale(next.code);
+    const currentIndex = LANGUAGE_PACKS.findIndex(l => l.code === activeLocale);
+    setActiveLocale(LANGUAGE_PACKS[(currentIndex + 1) % LANGUAGE_PACKS.length].code);
   };
 
-  const current = AVAILABLE_LOCALES.find(l => l.code === activeLocale) ?? AVAILABLE_LOCALES[0];
+  const current = LANGUAGE_PACKS.find(l => l.code === activeLocale) ?? LANGUAGE_PACKS[0];
 
   return (
     <TouchableOpacity
       style={[styles.button, {backgroundColor: theme.keyBackground}]}
-      onPress={cycleLocale}
+      onPress={() => setActivePanel('languages')}
       onLongPress={cycleLocale}>
       <Text style={{color: theme.keyText, fontSize: 12, fontWeight: '600'}}>{current.label}</Text>
     </TouchableOpacity>

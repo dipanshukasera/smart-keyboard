@@ -29,15 +29,7 @@ import {SwipeTrail, SwipeTrailHandle} from './SwipeTrail';
 // existing per-key long-press hint), which stays available regardless.
 const NUMBER_ROW_DIGITS = '1234567890'.split('');
 
-import enGB from '../layouts/en-GB.json';
-import hiIN from '../layouts/hi-IN.json';
-import esES from '../layouts/es-ES.json';
-
-const LAYOUTS: Record<string, LayoutDef> = {
-  'en-GB': enGB as LayoutDef,
-  'hi-IN': hiIN as LayoutDef,
-  'es-ES': esES as LayoutDef,
-};
+import {LAYOUTS} from '../layouts/registry';
 
 // Gboard shows 1-2-3...0 above the top letter row regardless of language,
 // and keeps the ?123/ABC pill a fixed dark gray in both its light and dark
