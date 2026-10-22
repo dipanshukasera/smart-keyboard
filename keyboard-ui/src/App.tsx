@@ -17,7 +17,6 @@ import {EmojiPanel} from './components/EmojiPanel';
 import {GifStickerPanel} from './components/GifStickerPanel';
 import {SymbolsNumberPanel} from './components/SymbolsNumberPanel';
 import {LanguagePackPanel} from './components/LanguagePackPanel';
-import {LanguageSwitcher} from './components/LanguageSwitcher';
 import {TranslatePanel} from './components/TranslatePanel';
 import {LanguagePickerModal} from './components/LanguagePickerModal';
 import {ThemeCustomizer} from './components/ThemeCustomizer';
@@ -515,7 +514,6 @@ export default function App() {
                   }}
                 />
               ))}
-              <LanguageSwitcher />
             </>
           )}
         </View>
@@ -648,7 +646,7 @@ const styles = StyleSheet.create({
   // toolbar's own fixed padding is part of that same overflow budget.
   toolbarLandscape: {
     paddingVertical: 2,
-    // Tallest landscape item is LanguageSwitcher's fixed 36dp button.
+    // Tallest landscape item is the toolbar icons' fixed 36dp buttons.
     height: 40,
   },
   toolbarIcon: {
