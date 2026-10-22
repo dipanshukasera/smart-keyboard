@@ -145,12 +145,18 @@ export function useKeyPreview() {
     // The translucent "pressed" wash and a plain key's corner radius.
     highlightColor: string;
     radius: number;
+    // Keep the bubble inside the panel: when there's no room above the top
+    // row it covers the key instead of poking out (and being clipped by) the
+    // keyboard window. The number pad has no toolbar above it, so it needs
+    // this; the letter keyboard's top row pops up over its toolbar.
+    keepInside?: boolean;
   }): React.ReactNode => (
     <PressLayer
       store={store}
       rects={keyRectRef.current}
       rowTops={rowTopRef.current}
       bodyWidth={bodyWidth}
+      clampTop={!!options.keepInside}
       {...options}
     />
   );
@@ -179,7 +185,9 @@ function PressLayer({
   fontFamily,
   highlightColor,
   radius,
+  clampTop,
 }: {
+  clampTop: boolean;
   store: StoreApi<PressState>;
   rects: Record<string, KeyRect>;
   rowTops: Record<string, number>;
@@ -224,7 +232,7 @@ function PressLayer({
             // Just above the key, overlapping its top edge slightly so it
             // reads as coming out of that key - for the top row this
             // reaches up over the toolbar, as Gboard's does.
-            top: top - bubbleHeight + rect.height * 0.2,
+            top: clampTop ? Math.max(0, top - bubbleHeight + rect.height * 0.2) : top - bubbleHeight + rect.height * 0.2,
             width: bubbleWidth,
             height: bubbleHeight,
             // Opaque even on a photo theme's see-through keys, so the

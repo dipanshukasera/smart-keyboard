@@ -185,6 +185,12 @@ interface KeyboardState {
   autoCorrection: string | null;
   // Most recent first, at most MAX_RECENT_EMOJIS.
   recentEmojis: string[];
+  // The latest copied text, offered as a chip in the suggestion tray (letters
+  // and number pad). `key` identifies that copy (its time and text): once the
+  // chip is used, or the keyboard closes, that key is "handled" and the chip
+  // stays away until something new is copied.
+  clipSuggestion: {text: string; key: string} | null;
+  handledClipKey: string | null;
   // Next-word prediction (services/nextWords.ts): which word follows which
   // in what the user types, the last finished word of this sentence (lower
   // case; null at a sentence start or in a fresh field), and the one
@@ -268,6 +274,11 @@ interface KeyboardState {
   // followed the word before it, and offer the words that usually come
   // next. `sentenceEnd` starts the next sentence with nothing carried over.
   completeWord: (word: string, sentenceEnd?: boolean) => void;
+  // Offers `clip` (null for nothing) unless it was already used or dismissed,
+  // or the field is a password field / incognito is on.
+  offerClipSuggestion: (clip: {text: string; key: string} | null) => void;
+  // The chip was used, or the keyboard closed: take it off the tray.
+  finishClipSuggestion: () => void;
   // After undoing a correction: the word before is the previous one again.
   restorePreviousWord: () => void;
   // After a swipe: `word` was typed (without a trailing space), and the
@@ -318,6 +329,8 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   wordPairs: {},
   previousWord: null,
   priorWord: null,
+  clipSuggestion: null,
+  handledClipKey: null,
   hapticFeedbackEnabled: true,
   keySoundEnabled: false,
   swipeTypingTrailEnabled: true,
@@ -614,6 +627,17 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
       previousWord: normalized && !sentenceEnd && !endsSentence(word) ? normalized : null,
     });
     get().updateTypedWord('');
+  },
+
+  offerClipSuggestion: clip => {
+    const {handledClipKey, isSensitiveField, isIncognito} = get();
+    const offer = clip && clip.key !== handledClipKey && !isSensitiveField && !isIncognito;
+    set({clipSuggestion: offer ? {text: clip.text.slice(0, 1000), key: clip.key} : null});
+  },
+
+  finishClipSuggestion: () => {
+    const current = get().clipSuggestion;
+    if (current) set({handledClipKey: current.key, clipSuggestion: null});
   },
 
   restorePreviousWord: () => {

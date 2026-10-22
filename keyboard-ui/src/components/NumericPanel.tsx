@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {DeviceEventEmitter, findNodeHandle, GestureResponderEvent, StyleSheet, Text, View} from 'react-native';
+import {DeviceEventEmitter, findNodeHandle, GestureResponderEvent, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useShallow} from 'zustand/react/shallow';
 import {useKeyboardStore} from '../store';
@@ -21,6 +21,11 @@ const HOLD_REPEAT_INTERVAL_MS = 60;
 // declares a numeric input class (TYPE_CLASS_NUMBER/PHONE/DATETIME) - a
 // payment amount box, PIN field, or phone number field never wants QWERTY.
 // See App.tsx's onInputFieldChanged listener and store's isNumericField.
+// Copied text the number pad offers to paste: digits and the few symbols a
+// phone number, amount or code has. Anything with letters would just be
+// refused by the field.
+const NUMBER_LIKE = /^[\d\s+\-().,]{1,40}$/;
+
 export function NumericPanel() {
   const {theme, numericFieldAllowsDecimal, numericFieldAllowsSign, keyboardSizeScale, keyStyle, keyFontFamily} =
     useKeyboardStore(
@@ -35,11 +40,22 @@ export function NumericPanel() {
     );
   // Same key shape/outline/3D/bold as the letter keyboard (Themes > Key style).
   const decor = useMemo(() => keyDecor(keyStyle, theme), [keyStyle, theme]);
-  const keyPaddingVertical = 14 * keyboardSizeScale;
-  const keyFontSize = 22 * keyboardSizeScale;
-  const keyIconSize = 22 * keyboardSizeScale;
+  // Compact keys (they used to be ~57dp tall and nearly the full width).
+  const keyPaddingVertical = 9 * keyboardSizeScale;
+  const keyFontSize = 20 * keyboardSizeScale;
+  const keyIconSize = 20 * keyboardSizeScale;
   const rowMarginVertical = 3 * keyboardSizeScale;
   const [enterIcon, setEnterIcon] = useState('keyboard-return');
+  // The latest copy, when it's number-like: a chip in the tray above the keys
+  // (gone once pasted or the keyboard closes - see the store).
+  const clipSuggestion = useKeyboardStore(state => state.clipSuggestion);
+  const numberClip = clipSuggestion && NUMBER_LIKE.test(clipSuggestion.text) ? clipSuggestion : null;
+  const pasteClip = () => {
+    if (!numberClip) return;
+    fireKeyFeedback();
+    InputConnection.commitText(numberClip.text);
+    useKeyboardStore.getState().finishClipSuggestion();
+  };
 
   useEffect(() => {
     const refresh = () => {
@@ -143,6 +159,21 @@ export function NumericPanel() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}>
+      {/* The tray: always this tall, so the pad doesn't jump when the chip
+          appears or goes. */}
+      <View style={styles.tray}>
+        {numberClip && (
+          <TouchableOpacity
+            style={[styles.clipChip, {backgroundColor: theme.keyBackground}]}
+            onPress={pasteClip}
+            accessibilityLabel={`Paste ${numberClip.text}`}>
+            <Icon name="content-paste" size={16} color={theme.accent} />
+            <Text style={{color: theme.keyText, fontSize: 15, fontWeight: '600', flexShrink: 1}} numberOfLines={1}>
+              {numberClip.text.replace(/\s+/g, ' ')}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
       {digitRows.map((row, rowIndex) => (
         <View
           key={rowIndex}
@@ -180,6 +211,7 @@ export function NumericPanel() {
         fontFamily: keyFontFamily,
         highlightColor: pressOverlayColor,
         radius: decor.radius,
+        keepInside: true,
       })}
     </View>
   );
@@ -187,11 +219,27 @@ export function NumericPanel() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 4,
+    paddingVertical: 6,
+  },
+  tray: {
+    height: 38,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  clipChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '100%',
+    paddingHorizontal: 14,
+    height: 32,
+    borderRadius: 16,
   },
   row: {
     flexDirection: 'row',
-    paddingHorizontal: 3,
+    // Side room, so the keys don't run edge to edge.
+    paddingHorizontal: 16,
   },
   key: {
     flex: 1,

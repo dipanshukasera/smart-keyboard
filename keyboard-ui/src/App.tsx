@@ -32,6 +32,7 @@ import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
 import {useHindiSuggestion} from './hooks/useHindiSuggestion';
 import {prefetchFeed} from './services/gifFeedCache';
+import {readLatestCopy} from './services/clipSuggestion';
 import {backgroundFrame} from './themes/imageTheme';
 import {BackgroundAdjust} from './components/BackgroundAdjust';
 import {BackgroundImage} from './native-bridge/BackgroundImage';
@@ -46,6 +47,7 @@ export default function App() {
     hydrate,
     suggestions,
     emojiSuggestion,
+    clipSuggestion,
     typedWord,
     isToolbarExpanded,
     setToolbarExpanded,
@@ -82,6 +84,7 @@ export default function App() {
     // wakes the server if it was asleep and downloads the first previews
     // (see gifFeedCache). Waits for the saved settings, so 18+ is only
     // fetched for someone who turned it on.
+    refreshClipSuggestion();
     hydrate().then(() => {
       prefetchFeed('/api/gif/trending');
       prefetchFeed('/api/gif/stickers/trending');
@@ -107,6 +110,9 @@ export default function App() {
       (event: {isPasswordField: boolean; isNumericField: boolean; allowDecimal: boolean; allowSign: boolean}) => {
         setSensitiveField(!!event?.isPasswordField);
         setNumericField(!!event?.isNumericField, !!event?.allowDecimal, !!event?.allowSign);
+        // The keyboard opened (or moved to another field): offer whatever was
+        // copied last, unless it was already used or the field is a password.
+        refreshClipSuggestion();
         // Every field - including the same app's field after reopening the
         // keyboard - starts with a fresh typing session: no word or
         // suggestions carried over from wherever the keyboard was last.
@@ -157,6 +163,9 @@ export default function App() {
   // that reset for a new context.
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('onKeyboardClosed', () => {
+      // Closing the keyboard takes the copied-text chip off the tray; it
+      // only comes back for something copied afterwards.
+      useKeyboardStore.getState().finishClipSuggestion();
       setActivePanel('keyboard');
       resetTypingSession();
       translation.resetSource();
@@ -169,6 +178,20 @@ export default function App() {
   // copies), not an instant single paste - capture whatever's on the
   // clipboard right now as we open it, since there's no live clipboard
   // listener (see ClipboardPanel's note on why).
+  // Reads the latest copy and offers it as a chip (see gifFeedCache for the
+  // same fire-and-forget pattern); the store drops it if already handled.
+  const refreshClipSuggestion = () => {
+    readLatestCopy().then(clip => useKeyboardStore.getState().offerClipSuggestion(clip));
+  };
+
+  // The chip: pastes the copied text and takes the chip off the tray.
+  const pasteClip = () => {
+    const clip = useKeyboardStore.getState().clipSuggestion;
+    if (!clip) return;
+    InputConnection.commitText(clip.text);
+    useKeyboardStore.getState().finishClipSuggestion();
+  };
+
   const openClipboardPanel = async () => {
     const text: string = (await ClipboardModule?.getClipboardText?.()) ?? '';
     if (text) {
@@ -300,17 +323,20 @@ export default function App() {
   // the icon row collapses down to one icon (tap to bring the icons back)
   // and the rest of the row shows suggestion chips instead - previously
   // the icons and suggestions occupied separate rows at the same time.
+  // The copied-text chip leads the tray whenever nothing is being typed.
+  const clipChip = typedWord === '' ? clipSuggestion : null;
   const showSuggestionStrip =
     activePanel === 'keyboard' &&
     !isToolbarExpanded &&
-    (suggestions.length > 0 || !!emojiSuggestion || !!hindi.suggestion);
+    (suggestions.length > 0 || !!emojiSuggestion || !!hindi.suggestion || !!clipChip);
 
   // Strip order: English words, then the Hindi (Devanagari) form of the
   // word, then the emoji. While Hinglish is in play the English words drop
   // to two, so all of it fits on one row.
-  type Chip = {key: string; kind: 'word' | 'hindi' | 'emoji'; disabled?: boolean};
+  type Chip = {key: string; kind: 'clip' | 'word' | 'hindi' | 'emoji'; disabled?: boolean};
   const suggestionChips: Chip[] = [
-    ...(hindi.active ? suggestions.slice(0, 2) : suggestions).map(word => ({key: word, kind: 'word' as const})),
+    ...(clipChip ? [{key: clipChip.text, kind: 'clip' as const}] : []),
+    ...(hindi.active || clipChip ? suggestions.slice(0, 2) : suggestions).map(word => ({key: word, kind: 'word' as const})),
     ...(hindi.suggestion
       ? [{key: hindi.suggestion.text, kind: 'hindi' as const, disabled: !hindi.suggestion.fresh}]
       : []),
@@ -394,11 +420,26 @@ export default function App() {
                   {index > 0 && <View style={[styles.suggestionDivider, {backgroundColor: theme.keyText + '33'}]} />}
                   <TouchableOpacity
                     disabled={chip.disabled}
-                    onPress={() => (chip.kind === 'emoji' ? applyEmojiSuggestion(chip.key) : applySuggestion(chip.key))}
+                    onPress={() =>
+                      chip.kind === 'clip'
+                        ? pasteClip()
+                        : chip.kind === 'emoji'
+                          ? applyEmojiSuggestion(chip.key)
+                          : applySuggestion(chip.key)
+                    }
                     style={[styles.suggestionChip, chip.disabled && styles.suggestionChipPending]}>
-                    <Text style={{color: theme.keyText, fontSize: chip.kind === 'emoji' ? 20 : chip.kind === 'hindi' ? 16 : 14}} numberOfLines={1}>
-                      {chip.key}
-                    </Text>
+                    {chip.kind === 'clip' ? (
+                      <View style={styles.clipChipInner}>
+                        <Icon name="content-paste" size={15} color={theme.accent} />
+                        <Text style={{color: theme.keyText, fontSize: 14, flexShrink: 1}} numberOfLines={1}>
+                          {chip.key.replace(/\s+/g, ' ')}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={{color: theme.keyText, fontSize: chip.kind === 'emoji' ? 20 : chip.kind === 'hindi' ? 16 : 14}} numberOfLines={1}>
+                        {chip.key}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </React.Fragment>
               ))}
@@ -620,6 +661,12 @@ const styles = StyleSheet.create({
   },
   suggestionChipPending: {
     opacity: 0.4,
+  },
+  clipChipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
   },
   suggestionDivider: {
     width: 1,
