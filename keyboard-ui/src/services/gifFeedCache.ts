@@ -157,7 +157,7 @@ export async function prefetchTagSearches(searchEndpoint: string, tags: string[]
         const results = response.data.results;
         if (!Array.isArray(results) || results.length === 0) continue;
         rememberSearch(searchKey(searchEndpoint, tag), {results, hasMore: !!response.data.hasMore});
-        results.slice(0, 6).forEach(item => Image.prefetch(item.previewUrl).catch(() => {}));
+        results.slice(0, PREFETCH_COUNT).forEach(item => Image.prefetch(item.previewUrl).catch(() => {}));
       } catch {
         // Offline or the server is waking - tapping the chip will fetch.
       }
