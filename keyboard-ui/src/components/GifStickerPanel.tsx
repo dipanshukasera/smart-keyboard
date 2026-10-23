@@ -20,7 +20,17 @@ import {API_BASE_URL, apiClient} from '../services/api';
 import {KeyboardLayout} from './KeyboardLayout';
 import {ExpressionModeBar} from './ExpressionModeBar';
 import {GifCommit} from '../native-bridge/GifCommit';
-import {cachedFeed, loadCachedFeed, prefetchFeed, rememberFeed} from '../services/gifFeedCache';
+import {
+  cachedFeed,
+  cachedSearch,
+  DEFAULT_TAGS,
+  loadCachedFeed,
+  loadSearchCache,
+  prefetchFeed,
+  rememberFeed,
+  rememberSearch,
+  searchKey,
+} from '../services/gifFeedCache';
 
 interface GifResult {
   id: string;
@@ -43,11 +53,6 @@ interface GifResult {
 export type ContentType = 'gif' | 'sticker' | 'adult';
 
 const {ClipboardModule} = NativeModules;
-
-// First pages of searches already made this session, so tapping a tag chip
-// (or repeating a search) shows its results at once instead of waiting on
-// the server again. Covers GIFs, stickers and 18+.
-const searchCache = new Map<string, {results: GifResult[]; hasMore: boolean}>();
 
 // The backend's mp4 -> .gif endpoint for one 18+ clip. The path ends in
 // .gif because GifCommitModule picks the MIME type it offers the chat app
@@ -82,11 +87,6 @@ function describeRequestFailure(err: any, typeLabel: string): string {
 // Quick-search chips shown after the GIFs/Stickers/18+ tabs. Tapping one
 // runs it as a search in the current tab. 18+ gets its own set: Redgifs
 // searches by tag (see gifProviders.js), so these are tags it recognises.
-const DEFAULT_TAGS: Record<ContentType, string[]> = {
-  gif: ['Happy', 'Love', 'LOL', 'Sad', 'Thank you', 'Wow', 'Yes', 'No', 'Hello', 'Party', 'Dance', 'Good night'],
-  sticker: ['Happy', 'Love', 'LOL', 'Sad', 'Thank you', 'Wow', 'Yes', 'No', 'Hello', 'Party', 'Cute', 'Good night'],
-  adult: ['Kissing', 'Teasing', 'Couple', 'Boobs', 'Ass', 'Lesbian', 'Amateur', 'Cosplay'],
-};
 
 // The first chip in the tag row: shows what was sent from this tab before
 // (cached, so it works offline) instead of search results.
@@ -299,12 +299,13 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       setLoadingMore(true);
     }
     setError(null);
-    const cacheKey = page !== 1 ? null : `${searchEndpoint}|${text.trim().toLowerCase()}`;
-    const known = cacheKey ? searchCache.get(cacheKey) : undefined;
+    const cacheKey = page !== 1 ? null : searchKey(searchEndpoint, text);
+    if (cacheKey) await loadSearchCache();
+    const known = cacheKey ? cachedSearch(cacheKey) : null;
     if (known) {
       setHasMore(known.hasMore);
       pageRef.current = 1;
-      setResults(known.results);
+      setResults(known.results as GifResult[]);
       setLoading(false);
       return;
     }
@@ -315,7 +316,7 @@ export function GifStickerPanel({contentType}: {contentType: ContentType}) {
       const batch = response.data.results;
       setHasMore(!!response.data.hasMore);
       pageRef.current = page;
-      if (cacheKey && batch.length > 0) searchCache.set(cacheKey, {results: batch, hasMore: !!response.data.hasMore});
+      if (cacheKey && batch.length > 0) rememberSearch(cacheKey, {results: batch, hasMore: !!response.data.hasMore});
       if (page === 1) {
         setResults(batch);
       } else {

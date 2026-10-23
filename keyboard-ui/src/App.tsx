@@ -32,7 +32,7 @@ import {VoicePanel} from './components/VoicePanel';
 import {InputConnection} from './native-bridge/InputConnection';
 import {useTranslationPanel} from './hooks/useTranslationPanel';
 import {useHindiSuggestion} from './hooks/useHindiSuggestion';
-import {prefetchFeed} from './services/gifFeedCache';
+import {DEFAULT_TAGS, prefetchFeed, prefetchTagSearches} from './services/gifFeedCache';
 import {readLatestCopy} from './services/clipSuggestion';
 import {FloatingKeyboard} from './native-bridge/FloatingKeyboard';
 import {backgroundFrame} from './themes/imageTheme';
@@ -97,7 +97,12 @@ export default function App() {
     hydrate().then(() => {
       prefetchFeed('/api/gif/trending');
       prefetchFeed('/api/gif/stickers/trending');
-      if (useKeyboardStore.getState().adultGifsEnabled) prefetchFeed('/api/gif/adult/trending');
+      const adult = useKeyboardStore.getState().adultGifsEnabled;
+      if (adult) prefetchFeed('/api/gif/adult/trending');
+      // Then every tag chip, so tapping one is instant too.
+      prefetchTagSearches('/api/gif/search', DEFAULT_TAGS.gif)
+        .then(() => prefetchTagSearches('/api/gif/stickers/search', DEFAULT_TAGS.sticker))
+        .then(() => (adult ? prefetchTagSearches('/api/gif/adult/search', DEFAULT_TAGS.adult) : undefined));
     });
     return () => floatingSubscription.remove();
   }, [hydrate]);
