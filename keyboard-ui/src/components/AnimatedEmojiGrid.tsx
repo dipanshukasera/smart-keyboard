@@ -12,7 +12,7 @@ const stillUrl = (code: string) => `${BASE}/${code}/128.png`;
 const animationUrl = (code: string) => `${BASE}/${code}/512.webp`;
 const gifUrl = (code: string) => `${BASE}/${code}/512.gif`;
 
-const COLUMNS = 6;
+const COLUMNS = 8;
 const ITEMS = animatedEmoji as [string, string][];
 
 /**
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   still: {
     flex: 1,
-    margin: 6,
+    margin: 4,
   },
   sending: {
     ...StyleSheet.absoluteFillObject,
@@ -116,8 +116,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previewImage: {
-    width: 150,
-    height: 150,
+    width: 110,
+    height: 110,
   },
   sendButton: {
     marginTop: 10,

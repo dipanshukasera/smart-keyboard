@@ -1,11 +1,10 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {DeviceEventEmitter, findNodeHandle, GestureResponderEvent, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useShallow} from 'zustand/react/shallow';
 import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {ENTER_ICON_BY_ACTION} from './KeyboardLayout';
-import {keyDecor} from '../themes/keyStyle';
 import {HoldRepeatKeyView} from './HoldRepeatKeyView';
 import {useKeyFeedback} from '../hooks/useKeyFeedback';
 import {useKeyPreview} from '../hooks/useKeyPreview';
@@ -26,24 +25,31 @@ const HOLD_REPEAT_INTERVAL_MS = 60;
 // refused by the field.
 const NUMBER_LIKE = /^[\d\s+\-().,]{1,40}$/;
 
+// The letters printed on a phone-style number pad.
+const LETTERS: Record<string, string> = {
+  '2': 'ABC',
+  '3': 'DEF',
+  '4': 'GHI',
+  '5': 'JKL',
+  '6': 'MNO',
+  '7': 'PQRS',
+  '8': 'TUV',
+  '9': 'WXYZ',
+};
+// Holding these types the second character instead (0 -> +, * -> #).
+const HOLD_CHARACTER: Record<string, string> = {'0': '+', '*': '#'};
+const HOLD_TYPE_DELAY_MS = 420;
+const PILL = 40;
+
 export function NumericPanel() {
-  const {theme, numericFieldAllowsDecimal, numericFieldAllowsSign, keyboardSizeScale, keyStyle, keyFontFamily} =
-    useKeyboardStore(
-      useShallow(state => ({
-        theme: state.theme,
-        numericFieldAllowsDecimal: state.numericFieldAllowsDecimal,
-        numericFieldAllowsSign: state.numericFieldAllowsSign,
-        keyboardSizeScale: state.keyboardSizeScale,
-        keyStyle: state.keyStyle,
-        keyFontFamily: state.keyFontFamily,
-      })),
-    );
-  // Same key shape/outline/3D/bold as the letter keyboard (Themes > Key style).
-  const decor = useMemo(() => keyDecor(keyStyle, theme), [keyStyle, theme]);
-  // Compact keys (they used to be ~57dp tall and nearly the full width).
-  const keyPaddingVertical = 9 * keyboardSizeScale;
-  const keyFontSize = 20 * keyboardSizeScale;
-  const keyIconSize = 20 * keyboardSizeScale;
+  const {theme, keyboardSizeScale, keyFontFamily} = useKeyboardStore(
+    useShallow(state => ({
+      theme: state.theme,
+      keyboardSizeScale: state.keyboardSizeScale,
+      keyFontFamily: state.keyFontFamily,
+    })),
+  );
+  const keyPaddingVertical = 12 * keyboardSizeScale;
   const rowMarginVertical = 3 * keyboardSizeScale;
   const [enterIcon, setEnterIcon] = useState('keyboard-return');
   // The latest copy, when it's number-like: a chip in the tray above the keys
@@ -74,16 +80,10 @@ export function NumericPanel() {
   const {pressKey, releaseKey, onBodyLayout, trackRowLayout, trackKeyLayout, keyAt, renderPreview} = useKeyPreview();
   const pressOverlayColor = theme.isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
 
-  // Whichever of "." / "-" the field actually accepts (never both - a real
-  // amount field takes one or the other, not a full expression); left out
-  // entirely if neither flag is set (e.g. a 4-digit PIN box).
-  const cornerKey = numericFieldAllowsDecimal ? '.' : numericFieldAllowsSign ? '-' : null;
-
-  const digitRows = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-  ];
+  // The quieter right-hand column: light accent for - and space, a soft
+  // violet for delete, the accent itself for the action key.
+  const tint = theme.accent + '2E';
+  const deleteTint = theme.isDark ? '#4A4458' : '#E8DEF8';
 
   // --- One touch handler for the whole pad ---------------------------
   // Like the letter keyboard: each finger types its key the instant it
@@ -92,7 +92,23 @@ export function NumericPanel() {
   // or OTP entry) could be swallowed by the first key's gesture and lost.
   // Delete keeps its own native hold-to-repeat view.
   const activeTouchesRef = useRef(new Set<string>());
+  const holdTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const containerRef = useRef<View>(null);
+  const typeKey = (keyId: string) => {
+    switch (keyId) {
+      case 'enter':
+        InputConnection.sendEnter();
+        return;
+      case 'space':
+        InputConnection.commitText(' ');
+        return;
+      case 'dash':
+        InputConnection.commitText('-');
+        return;
+      default:
+        InputConnection.commitText(keyId);
+    }
+  };
   const handleTouchStart = (event: GestureResponderEvent) => {
     const container = findNodeHandle(containerRef.current);
     for (const touch of event.nativeEvent.changedTouches) {
@@ -102,54 +118,101 @@ export function NumericPanel() {
       if (Number(touch.target) !== container) continue;
       const keyId = keyAt(touch.locationX, touch.locationY);
       if (!keyId || keyId === 'delete') continue;
-      activeTouchesRef.current.add(String(touch.identifier));
+      const id = String(touch.identifier);
+      activeTouchesRef.current.add(id);
       fireKeyFeedback();
-      if (keyId === 'enter') {
-        pressKey('enter');
-        InputConnection.sendEnter();
-      } else {
-        pressKey(keyId, keyId);
-        InputConnection.commitText(keyId);
+      const typesCharacter = keyId !== 'enter' && keyId !== 'space';
+      pressKey(keyId, typesCharacter ? (keyId === 'dash' ? '-' : keyId) : null);
+      typeKey(keyId);
+      const hold = HOLD_CHARACTER[keyId];
+      if (hold) {
+        holdTimersRef.current.set(
+          id,
+          setTimeout(() => {
+            holdTimersRef.current.delete(id);
+            // Swap what the touch-down typed for the held character.
+            InputConnection.deleteBackward(1);
+            InputConnection.commitText(hold);
+            fireKeyFeedback();
+          }, HOLD_TYPE_DELAY_MS),
+        );
       }
     }
   };
   const handleTouchEnd = (event: GestureResponderEvent) => {
     for (const touch of event.nativeEvent.changedTouches) {
-      if (activeTouchesRef.current.delete(String(touch.identifier))) releaseKey();
+      const id = String(touch.identifier);
+      const timer = holdTimersRef.current.get(id);
+      if (timer) {
+        clearTimeout(timer);
+        holdTimersRef.current.delete(id);
+      }
+      if (activeTouchesRef.current.delete(id)) releaseKey();
     }
   };
-
-  const label = (text: string) => (
-    <Text
-      style={{
-        color: theme.keyText,
-        fontSize: keyFontSize,
-        fontWeight: decor.labelWeight,
-        fontFamily: keyFontFamily ?? undefined,
-      }}>
-      {text}
-    </Text>
+  useEffect(
+    () => () => {
+      holdTimersRef.current.forEach(timer => clearTimeout(timer));
+    },
+    [],
   );
 
-  // A key's id is what it types (digits, "." / "-"), or "enter".
-  const tapKey = (id: string, row: string, content: React.ReactNode, options: {flex?: number; accent?: boolean} = {}) => (
+  const digitContent = (digit: string) => (
+    <View style={styles.digitContent}>
+      <Text style={{color: theme.keyText, fontSize: 28 * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>{digit}</Text>
+      {LETTERS[digit] && (
+        <Text style={{color: theme.keyText + 'CC', fontSize: 12 * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>
+          {LETTERS[digit]}
+        </Text>
+      )}
+    </View>
+  );
+  const symbolContent = (main: string, hold?: string) => (
+    <View style={styles.digitContent}>
+      <Text style={{color: theme.keyText, fontSize: (hold ? 24 : 28) * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>{main}</Text>
+      {hold && <Text style={{color: theme.keyText, fontSize: 18 * keyboardSizeScale}}>{hold}</Text>}
+    </View>
+  );
+
+  // A key's id is what it types (digits, * . ), or dash / space / enter.
+  const tapKey = (id: string, row: string, content: React.ReactNode, background: string) => (
     <View
       key={id}
       pointerEvents="none"
-      onLayout={trackKeyLayout(id, row, options.accent ? decor.accentRadius : undefined)}
-      style={[
-        styles.key,
-        decor.key,
-        {
-          flex: options.flex ?? 1,
-          backgroundColor: options.accent ? theme.accent : theme.keyBackground,
-          paddingVertical: keyPaddingVertical,
-        },
-        options.accent && {borderRadius: decor.accentRadius},
-      ]}>
+      onLayout={trackKeyLayout(id, row, PILL)}
+      style={[styles.key, {backgroundColor: background, paddingVertical: keyPaddingVertical}]}>
       {content}
     </View>
   );
+  const iconFor = (name: string) => (name === 'arrow-forward' ? 'keyboard-tab' : name);
+
+  const digitRows = [
+    {digits: ['1', '2', '3'], side: tapKey('dash', '0', <Text style={{color: theme.keyText, fontSize: 28 * keyboardSizeScale}}>–</Text>, tint)},
+    {
+      digits: ['4', '5', '6'],
+      side: tapKey('space', '1', <Icon name="space-bar" size={26 * keyboardSizeScale} color={theme.keyText} />, tint),
+    },
+    {
+      digits: ['7', '8', '9'],
+      side: (
+        <HoldRepeatKeyView
+          key="delete"
+          mode="repeat"
+          longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
+          repeatIntervalMs={HOLD_REPEAT_INTERVAL_MS}
+          onPressStart={() => pressKey('delete')}
+          onRepeatTick={() => {
+            fireKeyFeedback();
+            InputConnection.deleteBackward(1);
+          }}
+          onPressEnd={releaseKey}
+          onLayout={trackKeyLayout('delete', '2', PILL)}
+          style={[styles.key, {backgroundColor: deleteTint, paddingVertical: keyPaddingVertical}]}>
+          <Icon name="backspace" size={24 * keyboardSizeScale} color={theme.keyText} />
+        </HoldRepeatKeyView>
+      ),
+    },
+  ];
 
   return (
     <View
@@ -180,37 +243,22 @@ export function NumericPanel() {
           pointerEvents="box-none"
           style={[styles.row, {marginVertical: rowMarginVertical}]}
           onLayout={trackRowLayout(String(rowIndex))}>
-          {row.map(digit => tapKey(digit, String(rowIndex), label(digit)))}
+          {row.digits.map(digit => tapKey(digit, String(rowIndex), digitContent(digit), theme.keyBackground))}
+          {row.side}
         </View>
       ))}
-      {/* Delete, 0, enter - with "." / "-" ahead of them when the field
-          takes one, so delete always sits just before 0 and enter just
-          after it. */}
       <View pointerEvents="box-none" style={[styles.row, {marginVertical: rowMarginVertical}]} onLayout={trackRowLayout('3')}>
-        {cornerKey && tapKey(cornerKey, '3', label(cornerKey), {flex: 0.6})}
-        <HoldRepeatKeyView
-          mode="repeat"
-          longPressDelayMs={HOLD_REPEAT_INITIAL_DELAY_MS}
-          repeatIntervalMs={HOLD_REPEAT_INTERVAL_MS}
-          onPressStart={() => pressKey('delete')}
-          onRepeatTick={() => {
-            fireKeyFeedback();
-            InputConnection.deleteBackward(1);
-          }}
-          onPressEnd={releaseKey}
-          onLayout={trackKeyLayout('delete', '3')}
-          style={[styles.key, decor.key, {backgroundColor: theme.keyBackground, paddingVertical: keyPaddingVertical}]}>
-          <Icon name="backspace" size={keyIconSize} color={theme.keyText} />
-        </HoldRepeatKeyView>
-        {tapKey('0', '3', label('0'))}
-        {tapKey('enter', '3', <Icon name={enterIcon} size={keyIconSize} color="#FFFFFF" />, {accent: true})}
+        {tapKey('*', '3', symbolContent('*', '#'), theme.keyBackground)}
+        {tapKey('0', '3', symbolContent('0', '+'), theme.keyBackground)}
+        {tapKey('.', '3', symbolContent('.'), theme.keyBackground)}
+        {tapKey('enter', '3', <Icon name={iconFor(enterIcon)} size={26 * keyboardSizeScale} color="#FFFFFF" />, theme.accent)}
       </View>
       {renderPreview({
         theme,
         scale: keyboardSizeScale,
         fontFamily: keyFontFamily,
         highlightColor: pressOverlayColor,
-        radius: decor.radius,
+        radius: PILL,
         keepInside: true,
       })}
     </View>
@@ -238,13 +286,18 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    // Side room, so the keys don't run edge to edge.
-    paddingHorizontal: 16,
+    paddingHorizontal: 6,
   },
   key: {
     flex: 1,
     marginHorizontal: 3,
+    borderRadius: PILL,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  digitContent: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
   },
 });
