@@ -62,6 +62,7 @@ export default function App() {
     resetTypingSession,
     setShiftActive,
     toolbarOrder,
+    hiddenTools,
     keyboardDimLevel,
     cycleKeyboardDim,
   } = useKeyboardStore();
@@ -491,7 +492,7 @@ export default function App() {
                 compact={isLandscape}
               />
               <View style={[styles.divider, {backgroundColor: theme.keyText + '33'}]} />
-              {toolbarOrder.map(id => (
+              {toolbarOrder.filter(id => !hiddenTools.includes(id)).map(id => (
                 <ToolRow
                   key={id}
                   id={id}

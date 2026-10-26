@@ -10,7 +10,7 @@ import {PanelSheet} from './PanelSheet';
 // (getTrackDrawable() returns null before the switch's compound drawable
 // is attached) - reproducibly crashed the whole IME process the moment
 // this screen opened.
-function PillToggle({value, accent, trackOff}: {value: boolean; accent: string; trackOff: string}) {
+export function PillToggle({value, accent, trackOff}: {value: boolean; accent: string; trackOff: string}) {
   return (
     <View style={[styles.pillTrack, {backgroundColor: value ? accent : trackOff}]}>
       <View style={[styles.pillThumb, value ? styles.pillThumbOn : styles.pillThumbOff]} />
@@ -193,7 +193,7 @@ export function SettingsPanel() {
         <TouchableOpacity
           style={[styles.row, {borderColor: theme.keyText + '22'}]}
           onPress={() => setActivePanel('toolbarOrder')}>
-          <Text style={{color: theme.keyText, fontSize: 15}}>Toolbar order</Text>
+          <Text style={{color: theme.keyText, fontSize: 15}}>Toolbar tools</Text>
           <Text style={{color: theme.accent, fontSize: 14, fontWeight: '600'}}>Customize</Text>
         </TouchableOpacity>
 

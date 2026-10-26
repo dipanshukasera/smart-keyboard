@@ -100,6 +100,7 @@ const KEY_SOUND_ENABLED_KEY = 'key_sound_enabled';
 const SWIPE_TRAIL_ENABLED_KEY = 'swipe_trail_enabled_v2';
 const KEY_FONT_FAMILY_KEY = 'key_font_family';
 const TOOLBAR_ORDER_KEY = 'toolbar_order';
+const TOOLBAR_HIDDEN_KEY = 'toolbar_hidden';
 const KEYBOARD_DIM_LEVEL_KEY = 'keyboard_dim_level';
 
 interface KeyboardState {
@@ -222,6 +223,9 @@ interface KeyboardState {
   // Which tools appear in the toolbar, and in what order - "more" (the
   // All-tools grid) is always first and isn't part of this list.
   toolbarOrder: ToolId[];
+  // Tools taken off the toolbar row (still in All tools).
+  hiddenTools: ToolId[];
+  setToolHidden: (id: ToolId, hidden: boolean) => void;
   // Index into DIM_LEVELS - cycled by tapping the toolbar's brightness
   // icon, applied as a semi-transparent overlay over the whole keyboard
   // (see App.tsx).
@@ -352,6 +356,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   swipeTypingTrailEnabled: true,
   keyFontFamily: null,
   toolbarOrder: ALL_TOOL_IDS,
+  hiddenTools: [],
   keyboardDimLevel: 0,
 
   setActiveLocale: locale => {
@@ -716,6 +721,13 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
     ThemeStorage.saveJSON(KEY_FONT_FAMILY_KEY, value);
   },
 
+  setToolHidden: (id, hidden) => {
+    const current = get().hiddenTools;
+    const next = hidden ? [...current.filter(tool => tool !== id), id] : current.filter(tool => tool !== id);
+    set({hiddenTools: next});
+    ThemeStorage.saveJSON(TOOLBAR_HIDDEN_KEY, next);
+  },
+
   setToolbarOrder: order => {
     set({toolbarOrder: order});
     ThemeStorage.saveJSON(TOOLBAR_ORDER_KEY, order);
@@ -729,6 +741,9 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
 
 
   hydrate: async () => {
+    ThemeStorage.loadJSON<ToolId[]>(TOOLBAR_HIDDEN_KEY, []).then(hidden =>
+      set({hiddenTools: Array.isArray(hidden) ? hidden.filter(id => ALL_TOOL_IDS.includes(id)) : []}),
+    );
     const [
       locale,
       storedTheme,
