@@ -517,6 +517,9 @@ export default function App() {
                 compact={isLandscape}
               />
               <View style={[styles.divider, {backgroundColor: theme.keyText + '33'}]} />
+              {/* The tools share what's left of the row; the gear and divider
+                  stay put at the left however many tools are switched off. */}
+              <View style={styles.toolsRow}>
               {toolbarOrder.filter(id => !hiddenTools.includes(id)).map(id => (
                 <ToolRow
                   key={id}
@@ -551,6 +554,7 @@ export default function App() {
                   }}
                 />
               ))}
+              </View>
             </>
           )}
         </View>
@@ -698,6 +702,12 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
   },
+  toolsRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+  },
   divider: {
     width: 1,
     height: 22,
@@ -735,6 +745,9 @@ const styles = StyleSheet.create({
   },
   suggestionChip: {
     flex: 1,
+    // The whole height of the strip is the touch target, not just the
+    // text's own height.
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
