@@ -14,6 +14,7 @@ import {useKeyboardStore} from '../store';
 import {InputConnection} from '../native-bridge/InputConnection';
 import {EmojiSupport} from '../native-bridge/EmojiSupport';
 import {ExpressionModeBar} from './ExpressionModeBar';
+import {AnimatedEmojiGrid} from './AnimatedEmojiGrid';
 import {EMOJI_CATEGORIES, EmojiCategory, EmojiEntry} from '../data/emojiPacks';
 
 const EMOJIS_PER_ROW = 8;
@@ -190,7 +191,10 @@ export function EmojiPanel() {
   // The emoji whose variants are showing, if any.
   const [variantsOf, setVariantsOf] = useState<Cell | null>(null);
 
+  const [animatedTab, setAnimatedTab] = useState(false);
+
   const jumpToCategory = (categoryId: string) => {
+    setAnimatedTab(false);
     lastJumpRef.current = Date.now();
     activeRef.current = categoryId;
     setActiveCategoryId(categoryId);
@@ -228,14 +232,24 @@ export function EmojiPanel() {
             key={category.id}
             style={[
               styles.categoryTab,
-              category.id === currentCategoryId && {backgroundColor: theme.accent + '44'},
+              !animatedTab && category.id === currentCategoryId && {backgroundColor: theme.accent + '44'},
             ]}
             onPress={() => jumpToCategory(category.id)}>
             <Text style={styles.tabEmoji}>{TAB_EMOJIS[category.id] ?? '🙂'}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          style={[styles.categoryTab, animatedTab && {backgroundColor: theme.accent + '44'}]}
+          onPress={() => setAnimatedTab(true)}>
+          <Text style={styles.tabEmoji}>✨</Text>
+        </TouchableOpacity>
       </View>
 
+      {animatedTab ? (
+        <View style={styles.gridArea}>
+          <AnimatedEmojiGrid />
+        </View>
+      ) : (
       <View style={styles.gridArea}>
         <FlatList
           ref={listRef}
@@ -291,6 +305,7 @@ export function EmojiPanel() {
           </View>
         )}
       </View>
+      )}
       <ExpressionModeBar active="emoji" />
     </View>
   );

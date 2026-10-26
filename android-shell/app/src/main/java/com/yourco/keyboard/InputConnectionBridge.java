@@ -42,9 +42,39 @@ public class InputConnectionBridge extends ReactContextBaseJavaModule {
     @ReactMethod
     public void deleteBackward(int count) {
         InputConnection ic = InputConnectionHolder.get();
-        if (ic != null) {
-            ic.deleteSurroundingText(count, 0);
+        if (ic == null) {
+            return;
         }
+        // One press of delete removes one whole character as the user sees
+        // it. An emoji is two or more UTF-16 units (a surrogate pair, plus
+        // skin tone / joiner / flag parts), so deleting a single unit left a
+        // broken half-emoji that took a second press to clear.
+        if (count == 1) {
+            CharSequence before = ic.getTextBeforeCursor(GRAPHEME_LOOKBACK, 0);
+            if (before != null && before.length() > 0) {
+                ic.deleteSurroundingText(lastCharacterLength(before.toString()), 0);
+                return;
+            }
+        }
+        ic.deleteSurroundingText(count, 0);
+    }
+
+    // How many UTF-16 units the last user-perceived character of `text` takes.
+    private static final int GRAPHEME_LOOKBACK = 64;
+
+    private static int lastCharacterLength(String text) {
+        try {
+            android.icu.text.BreakIterator iterator = android.icu.text.BreakIterator.getCharacterInstance();
+            iterator.setText(text);
+            iterator.last();
+            int start = iterator.previous();
+            if (start != android.icu.text.BreakIterator.DONE) {
+                return Math.max(1, text.length() - start);
+            }
+        } catch (RuntimeException ignored) {
+            // fall through to the code-point fallback
+        }
+        return Character.charCount(text.codePointBefore(text.length()));
     }
 
     @ReactMethod

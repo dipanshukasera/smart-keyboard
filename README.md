@@ -94,3 +94,7 @@ To run the bash file
 logs
 docker compose -f infra/docker-compose.yml logs -f backend
 `````
+
+## Credits
+
+- Animated emoji: [Noto Emoji Animation](https://googlefonts.github.io/noto-emoji-animation/) by Google, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). They are loaded from Google's font server, not bundled.
