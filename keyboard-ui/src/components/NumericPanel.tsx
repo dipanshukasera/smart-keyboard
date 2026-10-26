@@ -49,7 +49,7 @@ export function NumericPanel() {
       keyFontFamily: state.keyFontFamily,
     })),
   );
-  const keyPaddingVertical = 12 * keyboardSizeScale;
+  const keyPaddingVertical = 9 * keyboardSizeScale;
   const rowMarginVertical = 3 * keyboardSizeScale;
   const [enterIcon, setEnterIcon] = useState('keyboard-return');
   // The latest copy, when it's number-like: a chip in the tray above the keys
@@ -159,7 +159,7 @@ export function NumericPanel() {
 
   const digitContent = (digit: string) => (
     <View style={styles.digitContent}>
-      <Text style={{color: theme.keyText, fontSize: 28 * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>{digit}</Text>
+      <Text style={{color: theme.keyText, fontSize: 26 * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>{digit}</Text>
       {LETTERS[digit] && (
         <Text style={{color: theme.keyText + 'CC', fontSize: 12 * keyboardSizeScale, fontFamily: keyFontFamily ?? undefined}}>
           {LETTERS[digit]}

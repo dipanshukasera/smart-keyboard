@@ -10,6 +10,7 @@ export type ImeAction = 'search' | 'send' | 'go' | 'done' | 'next' | 'unspecifie
 interface InputConnectionBridgeNative {
   commitText(text: string): void;
   deleteBackward(count: number): void;
+  replaceBefore(count: number, text: string): void;
   sendEnter(): void;
   getTextBeforeCursor(length: number): Promise<string>;
   setSelection(start: number, end: number): void;
@@ -83,6 +84,11 @@ export const InputConnection = {
 
   deleteSelection(): void {
     requireNative().deleteSelection();
+  },
+
+  // Swaps the last `count` characters for `text` in one step.
+  replaceBefore(count: number, text: string): void {
+    requireNative().replaceBefore(count, text);
   },
 
   // direction < 0 moves left, > 0 moves right - backs spacebar-drag cursor

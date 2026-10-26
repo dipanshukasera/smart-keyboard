@@ -280,6 +280,14 @@ function KeyboardLayoutImpl({
     return () => subscription.remove();
   }, [onCommitText, setShiftActive]);
 
+  // Deleting a selection (see InputConnectionBridge.deleteBackward) removes
+  // whatever word was being tracked, so the suggestions start over.
+  useEffect(() => {
+    if (onCommitText) return;
+    const subscription = DeviceEventEmitter.addListener('onSelectionDeleted', () => updateTypedWord(''));
+    return () => subscription.remove();
+  }, [onCommitText, updateTypedWord]);
+
   const baseLayout = LAYOUTS[activeLocale] ?? LAYOUTS['en-GB'];
   // A layout with extra pages (Hindi's "1/4" key) shows one at a time: page
   // one is its `rows`, the others replace all but the shared bottom row.

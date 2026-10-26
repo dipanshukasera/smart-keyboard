@@ -228,11 +228,13 @@ export default function App() {
   // KeyboardLayout's showSuggestions guard), so it's safe to act on the
   // real InputConnection directly here without any redirect plumbing.
   const applySuggestion = (word: string) => {
-    InputConnection.deleteBackward(typedWord.length);
-    InputConnection.commitText(word + ' ');
+    // The word as it is right now (not as of the last render): a chip can be
+    // tapped between a keystroke and the re-render that follows it.
+    const original = useKeyboardStore.getState().typedWord;
+    InputConnection.replaceBefore(original.length, word + ' ');
     // Lets an immediate next backspace revert this exact substitution -
     // see KeyboardLayout's maybeUndoSuggestion.
-    setLastSuggestion({original: typedWord, applied: word});
+    setLastSuggestion({original, applied: word});
     // Learns the word and shows what usually comes after it - the strip
     // stays up for the next word instead of hiding.
     useKeyboardStore.getState().completeWord(word);
@@ -242,11 +244,11 @@ export default function App() {
   // as Gboard's emoji chip does. Recorded the same way as a word
   // suggestion, so an immediate backspace takes it back off again.
   const applyEmojiSuggestion = (emoji: string) => {
-    InputConnection.deleteBackward(typedWord.length);
-    const applied = `${typedWord} ${emoji}`;
-    InputConnection.commitText(applied + ' ');
-    setLastSuggestion({original: typedWord, applied});
-    useKeyboardStore.getState().completeWord(typedWord);
+    const original = useKeyboardStore.getState().typedWord;
+    const applied = `${original} ${emoji}`;
+    InputConnection.replaceBefore(original.length, applied + ' ');
+    setLastSuggestion({original, applied});
+    useKeyboardStore.getState().completeWord(original);
     useKeyboardStore.getState().addRecentEmoji(emoji);
   };
 
@@ -450,7 +452,11 @@ export default function App() {
                   {index > 0 && <View style={[styles.suggestionDivider, {backgroundColor: theme.keyText + '33'}]} />}
                   <TouchableOpacity
                     disabled={chip.disabled}
-                    onPress={() =>
+                    // On touch-down, like the keys: a chip that waited for
+                    // the finger to lift could lose the tap when the strip
+                    // re-rendered under it mid-press.
+                    activeOpacity={0.5}
+                    onPressIn={() =>
                       chip.kind === 'clip'
                         ? pasteClip()
                         : chip.kind === 'emoji'

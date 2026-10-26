@@ -1,10 +1,11 @@
 import {useEffect, useRef, useState} from 'react';
 import {apiClient} from '../services/api';
 import {useKeyboardStore} from '../store';
+import {localHinglish} from '../services/hinglishLocal';
 
 // Wait this long after the last keystroke before asking the backend, so
 // typing a word quickly is one request rather than one per letter.
-const LOOKUP_DELAY_MS = 150;
+const LOOKUP_DELAY_MS = 80;
 // Short on purpose: a suggestion that turns up seconds late is useless, and
 // a cold Render instance (30-50s to wake) shouldn't leave requests piling up.
 const LOOKUP_TIMEOUT_MS = 4000;
@@ -76,11 +77,20 @@ export function useHindiSuggestion(): {active: boolean; suggestion: HindiSuggest
     return () => clearTimeout(timer);
   }, [active, word]);
 
-  if (!active || !last) {
+  // On-device guess, available at the first keystroke: shown at once, then
+  // the server's answer (below) takes over when it arrives.
+  const local = active ? localHinglish(word) : null;
+  if (!active) {
     return {active, suggestion: null};
   }
-  if (last.word === word) {
+  if (last && last.word === word) {
     return {active, suggestion: {text: last.text, fresh: true}};
+  }
+  if (local) {
+    return {active, suggestion: {text: local, fresh: true}};
+  }
+  if (!last) {
+    return {active, suggestion: null};
   }
   // Still typing the same word forward - keep the previous result on show
   // (dimmed) until this one arrives.

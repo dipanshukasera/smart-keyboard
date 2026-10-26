@@ -45,6 +45,17 @@ public class InputConnectionBridge extends ReactContextBaseJavaModule {
         if (ic == null) {
             return;
         }
+        // Selected text goes first: delete replaces the selection with
+        // nothing, as any keyboard's backspace does. deleteSurroundingText
+        // works around the selection, so without this it was left in place.
+        if (hasSelection(ic)) {
+            ic.commitText("", 1);
+            // The word the keyboard thought was being typed is gone too.
+            getReactApplicationContext()
+                    .getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                    .emit("onSelectionDeleted", null);
+            return;
+        }
         // One press of delete removes one whole character as the user sees
         // it. An emoji is two or more UTF-16 units (a surrogate pair, plus
         // skin tone / joiner / flag parts), so deleting a single unit left a
@@ -57,6 +68,38 @@ public class InputConnectionBridge extends ReactContextBaseJavaModule {
             }
         }
         ic.deleteSurroundingText(count, 0);
+    }
+
+    private static boolean hasSelection(InputConnection ic) {
+        CharSequence selected = ic.getSelectedText(0);
+        if (selected != null && selected.length() > 0) {
+            return true;
+        }
+        // Some editors don't hand out the selected text; ask for the range.
+        android.view.inputmethod.ExtractedText extracted =
+                ic.getExtractedText(new android.view.inputmethod.ExtractedTextRequest(), 0);
+        return extracted != null && extracted.selectionStart != extracted.selectionEnd;
+    }
+
+    // Swaps the last `count` characters for `text` in one atomic step - a
+    // suggestion chip replacing the word being typed. One call to the field
+    // instead of a delete and then a commit, so the tap lands at once and the
+    // field never shows the word half-removed.
+    @ReactMethod
+    public void replaceBefore(int count, String text) {
+        InputConnection ic = InputConnectionHolder.get();
+        if (ic == null) {
+            return;
+        }
+        ic.beginBatchEdit();
+        try {
+            if (count > 0) {
+                ic.deleteSurroundingText(count, 0);
+            }
+            ic.commitText(text, 1);
+        } finally {
+            ic.endBatchEdit();
+        }
     }
 
     // How many UTF-16 units the last user-perceived character of `text` takes.

@@ -53,7 +53,7 @@ export function NumberKeypad() {
     })),
   );
   const decor = useMemo(() => keyDecor(keyStyle, theme), [keyStyle, theme]);
-  const keyPaddingVertical = 11 * keyboardSizeScale;
+  const keyPaddingVertical = 9 * keyboardSizeScale;
   const rowMarginVertical = 3 * keyboardSizeScale;
   const [enterIcon, setEnterIcon] = useState('keyboard-return');
 
