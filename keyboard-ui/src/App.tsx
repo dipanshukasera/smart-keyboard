@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
+  Appearance,
   DeviceEventEmitter,
   Image,
   LayoutChangeEvent,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore, ToolId, DIM_LEVELS} from './store';
+import {resolveAutoTheme} from './themes/gallery';
 import {KeyboardLayout} from './components/KeyboardLayout';
 import {EmojiPanel} from './components/EmojiPanel';
 import {GifStickerPanel} from './components/GifStickerPanel';
@@ -107,6 +109,29 @@ export default function App() {
     });
     return () => floatingSubscription.remove();
   }, [hydrate]);
+
+  // System Auto / Dynamic Color follow the phone: light or dark with its
+  // setting (and, for Dynamic Color, its accent colour). Re-resolved when the
+  // phone's setting changes, and when the theme is first chosen.
+  useEffect(() => {
+    if (!theme.auto) return undefined;
+    let cancelled = false;
+    const apply = async (scheme: string | null | undefined) => {
+      const current = useKeyboardStore.getState().theme;
+      if (!current.auto) return;
+      const accent = current.auto === 'dynamic' ? await BackgroundImage.systemAccent() : null;
+      if (cancelled) return;
+      const next = resolveAutoTheme(current, scheme === 'dark', accent);
+      const same = next.keyBackground === current.keyBackground && next.panelBackground === current.panelBackground && next.accent === current.accent;
+      if (!same) useKeyboardStore.getState().setTheme(next);
+    };
+    apply(Appearance.getColorScheme());
+    const subscription = Appearance.addChangeListener(({colorScheme}) => apply(colorScheme));
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [theme.auto, theme.id]);
 
   // The strip under a floating keyboard's keys (its drag handle) takes the
   // theme's colours: the panel colour (a photo theme's base colour) and the

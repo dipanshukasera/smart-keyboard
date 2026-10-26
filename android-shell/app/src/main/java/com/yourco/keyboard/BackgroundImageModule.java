@@ -7,7 +7,15 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.WritableMap;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import com.facebook.react.bridge.Arguments;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * Keyboard background photos (Themes > "Photo"): pick() opens
@@ -63,5 +71,59 @@ public class BackgroundImageModule extends ReactContextBaseJavaModule {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    // Theme gallery: downloads one of the gallery's pictures, saves it as the
+    // app's own copy (same folder and format as a picked photo) and resolves
+    // with its colours and shape, so JS can build the theme exactly as for a
+    // photo from the gallery picker.
+    @ReactMethod
+    public void download(final String url, final Promise promise) {
+        new Thread(() -> {
+            try {
+                HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                byte[] bytes;
+                try (InputStream in = connection.getInputStream(); ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+                    byte[] chunk = new byte[16384];
+                    int read;
+                    while ((read = in.read(chunk)) > 0) buffer.write(chunk, 0, read);
+                    bytes = buffer.toByteArray();
+                } finally {
+                    connection.disconnect();
+                }
+                Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                if (bitmap == null) throw new IllegalStateException("decode failed");
+                File dir = new File(getReactApplicationContext().getFilesDir(), DIR);
+                if (!dir.exists()) dir.mkdirs();
+                File out = new File(dir, "bg_" + System.currentTimeMillis() + ".jpg");
+                try (FileOutputStream fos = new FileOutputStream(out)) {
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos);
+                }
+                WritableMap result = Arguments.createMap();
+                result.putString("uri", Uri.fromFile(out).toString());
+                result.putDouble("aspect", bitmap.getWidth() / (double) bitmap.getHeight());
+                PickBackgroundActivity.putColours(bitmap, result);
+                promise.resolve(result);
+            } catch (Exception e) {
+                promise.reject("download_failed", e.getMessage());
+            }
+        }).start();
+    }
+
+    // The phone's own accent colour (Android 12+ "Material You"), as #RRGGBB,
+    // or null on older versions.
+    @ReactMethod
+    public void systemAccent(Promise promise) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                int color = getReactApplicationContext().getColor(android.R.color.system_accent1_600);
+                promise.resolve(String.format("#%06X", color & 0xFFFFFF));
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+        promise.resolve(null);
     }
 }

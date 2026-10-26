@@ -9,11 +9,15 @@ export interface PickedBackground {
   vibrant?: string;
   // 0 (black) .. 1 (white), averaged over the image.
   luminance: number;
+  // width / height of the saved copy (downloads only).
+  aspect?: number;
 }
 
 interface BackgroundImageNative {
   pick(): Promise<PickedBackground | null>;
   remove(uri: string): void;
+  download(url: string): Promise<PickedBackground>;
+  systemAccent(): Promise<string | null>;
 }
 
 const native = NativeModules.BackgroundImage as BackgroundImageNative | undefined;
@@ -24,6 +28,22 @@ export const BackgroundImage = {
   async pick(): Promise<PickedBackground | null> {
     if (!native) return null;
     return native.pick();
+  },
+
+  // A gallery picture, downloaded and saved like a picked photo.
+  async download(url: string): Promise<PickedBackground> {
+    if (!native) throw new Error('Not available');
+    return native.download(url);
+  },
+
+  // Android 12+ system accent colour, #RRGGBB, else null.
+  async systemAccent(): Promise<string | null> {
+    if (!native) return null;
+    try {
+      return await native.systemAccent();
+    } catch {
+      return null;
+    }
   },
 
   remove(uri: string): void {

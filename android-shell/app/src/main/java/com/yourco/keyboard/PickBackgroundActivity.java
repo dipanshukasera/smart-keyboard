@@ -123,7 +123,7 @@ public class PickBackgroundActivity extends Activity {
     // shades), its most vivid colour that covers a meaningful part of it,
     // and its overall brightness - enough for JS to derive key, text and
     // accent colours that sit well on top of it.
-    private static void putColours(Bitmap source, WritableMap result) {
+    static void putColours(Bitmap source, WritableMap result) {
         Bitmap small = Bitmap.createScaledBitmap(source, 48, 48, true);
         int total = 48 * 48;
         // 5 bits per channel: 32768 buckets of similar colours.

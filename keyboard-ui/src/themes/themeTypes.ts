@@ -7,6 +7,10 @@ export interface KeyboardTheme {
   panelBackground: string;
   accent: string;
   isDark: boolean;
+  // Themes that follow the phone: 'system' flips between light and dark with
+  // the system setting; 'dynamic' does that too and takes the phone's accent
+  // colour (see themes/gallery.ts resolveAutoTheme).
+  auto?: 'system' | 'dynamic';
   // Photo themes (themes/imageTheme.ts): a file:// image drawn behind the
   // whole keyboard, the wash over it, and its main colour (shown while it
   // loads, and for the swatch).

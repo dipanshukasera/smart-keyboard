@@ -101,6 +101,7 @@ const SWIPE_TRAIL_ENABLED_KEY = 'swipe_trail_enabled_v2';
 const KEY_FONT_FAMILY_KEY = 'key_font_family';
 const TOOLBAR_ORDER_KEY = 'toolbar_order';
 const TOOLBAR_HIDDEN_KEY = 'toolbar_hidden';
+const GALLERY_THEMES_KEY = 'gallery_themes';
 const KEYBOARD_DIM_LEVEL_KEY = 'keyboard_dim_level';
 
 interface KeyboardState {
@@ -108,6 +109,9 @@ interface KeyboardState {
   activePanel: PanelType;
   theme: KeyboardTheme;
   customThemes: KeyboardTheme[];
+  // Gallery pictures already downloaded, by gallery id.
+  galleryThemes: Record<string, KeyboardTheme>;
+  saveGalleryTheme: (galleryId: string, theme: KeyboardTheme) => void;
   // Multiplies key padding/font/icon size (see KeyboardLayout) - the
   // resulting height change flows through the existing onLayout ->
   // reportContentHeight pipeline, so no native change was needed to
@@ -317,6 +321,7 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   activePanel: 'keyboard',
   theme: defaultTheme,
   customThemes: [],
+  galleryThemes: {},
   keyboardSizeScale: 1,
   isShiftActive: false,
   capsLock: false,
@@ -369,6 +374,12 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
   setTheme: theme => {
     set({theme});
     ThemeStorage.saveTheme(theme);
+  },
+
+  saveGalleryTheme: (galleryId, theme) => {
+    const updated = {...get().galleryThemes, [galleryId]: theme};
+    set({galleryThemes: updated});
+    ThemeStorage.saveJSON(GALLERY_THEMES_KEY, updated);
   },
 
   addCustomTheme: theme => {
@@ -741,6 +752,9 @@ export const useKeyboardStore = create<KeyboardState>((set, get) => ({
 
 
   hydrate: async () => {
+    ThemeStorage.loadJSON<Record<string, KeyboardTheme>>(GALLERY_THEMES_KEY, {}).then(saved =>
+      set({galleryThemes: saved && typeof saved === 'object' ? saved : {}}),
+    );
     ThemeStorage.loadJSON<ToolId[]>(TOOLBAR_HIDDEN_KEY, []).then(hidden =>
       set({hiddenTools: Array.isArray(hidden) ? hidden.filter(id => ALL_TOOL_IDS.includes(id)) : []}),
     );

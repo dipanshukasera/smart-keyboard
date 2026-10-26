@@ -1,9 +1,9 @@
 import React, {useState} from 'react';
-import {ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {useKeyboardStore} from '../store';
-import {BUILT_IN_THEMES} from '../themes/presets';
 import {ThemeCreator} from './ThemeCreator';
+import {ThemeGallery} from './ThemeGallery';
 import {KeyShape, keyDecor} from '../themes/keyStyle';
 import {BackgroundImage} from '../native-bridge/BackgroundImage';
 import {themeFromImage} from '../themes/imageTheme';
@@ -21,9 +21,7 @@ const SHAPES: {value: KeyShape; label: string}[] = [
 export function ThemeCustomizer() {
   const {
     theme,
-    setTheme,
     customThemes,
-    deleteCustomTheme,
     setPendingPhoto,
     setActivePanel,
     keyStyle,
@@ -60,69 +58,7 @@ export function ThemeCustomizer() {
       {/* Bounded so the screen scrolls instead of growing past the
           keyboard window's height cap and clipping the bottom off. */}
       <ScrollView style={styles.scroll}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {BUILT_IN_THEMES.map(preset => (
-            <TouchableOpacity
-              key={preset.id}
-              style={[
-                styles.swatch,
-                {
-                  backgroundColor: preset.keyBackground,
-                  borderColor: preset.id === theme.id ? preset.accent : 'transparent',
-                },
-              ]}
-              onPress={() => setTheme(preset)}>
-              <Text style={{color: preset.keyText}}>{preset.name}</Text>
-            </TouchableOpacity>
-          ))}
-          {customThemes.map(custom => (
-            <TouchableOpacity
-              key={custom.id}
-              style={[
-                styles.swatch,
-                {
-                  backgroundColor: custom.keyBackground,
-                  borderColor: custom.id === theme.id ? custom.accent : 'transparent',
-                },
-              ]}
-              onPress={() => setTheme(custom)}
-              onLongPress={() => deleteCustomTheme(custom.id)}>
-              {custom.backgroundImage && (
-                <Image source={{uri: custom.backgroundImage}} style={styles.swatchImage} resizeMode="cover" />
-              )}
-              {custom.backgroundImage ? (
-                // A key-shaped chip in the theme's own colours over the photo.
-                <View style={[styles.swatchChip, {backgroundColor: custom.keyBackground}]}>
-                  <Text style={{color: custom.keyText, fontSize: 12}}>Aa</Text>
-                  <View style={[styles.swatchDot, {backgroundColor: custom.accent}]} />
-                </View>
-              ) : (
-                <Text style={{color: custom.keyText}} numberOfLines={1}>
-                  {custom.name}
-                </Text>
-              )}
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity
-            style={[styles.swatch, styles.createSwatch, {borderColor: theme.keyText + '33'}]}
-            onPress={() => setShowCreator(true)}>
-            <Icon name="add" size={20} color={theme.keyText + '99'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.swatch, styles.createSwatch, {borderColor: theme.keyText + '33'}]}
-            disabled={picking}
-            onPress={pickPhoto}>
-            {picking ? (
-              <ActivityIndicator color={theme.accent} />
-            ) : (
-              <>
-                <Icon name="add-photo-alternate" size={22} color={theme.keyText + '99'} />
-                <Text style={{color: theme.keyText + '99', fontSize: 11, marginTop: 4}}>Photo</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-        {pickError && <Text style={[styles.hint, {color: theme.accent}]}>{pickError}</Text>}
+        <ThemeGallery onCreate={() => setShowCreator(true)} onPickPhoto={pickPhoto} picking={picking} pickError={pickError} />
         {/* Move/zoom the photo behind the keys, with a preview, for the photo
             theme that's on now. */}
         {theme.backgroundImage && customThemes.some(custom => custom.id === theme.id) && (
@@ -132,9 +68,6 @@ export function ThemeCustomizer() {
             <Icon name="crop" size={16} color={theme.keyText} />
             <Text style={{color: theme.keyText, fontSize: 12, marginLeft: 6}}>Adjust photo</Text>
           </TouchableOpacity>
-        )}
-        {customThemes.length > 0 && (
-          <Text style={[styles.hint, {color: theme.keyText + '77'}]}>Long-press a custom theme to delete it</Text>
         )}
 
         <Text style={[styles.sectionLabel, {color: theme.keyText + '99'}]}>KEY STYLE</Text>
@@ -200,7 +133,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   scroll: {
-    maxHeight: 330,
+    maxHeight: 420,
   },
   swatch: {
     width: 90,
