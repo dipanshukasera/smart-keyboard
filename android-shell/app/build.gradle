@@ -47,6 +47,12 @@ android {
                 storePassword releaseProps['storePassword']
                 keyAlias releaseProps['keyAlias']
                 keyPassword releaseProps['keyPassword']
+                // All three schemes, so older and vendor installers (some MIUI
+                // builds reject a v2-only APK as "package appears to be
+                // invalid") can verify it.
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
             }
         }
         debug {
